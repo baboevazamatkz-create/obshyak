@@ -101,41 +101,40 @@ class SplitCard extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             for (final settlement in pool.settlements)
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${settlement.from} → ${settlement.to}',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13.5, color: ink),
-                    ),
-                  ),
-                  Text(
-                    currency.format.format(settlement.amount),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: ink,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  TextButton(
-                    onPressed: () => onSettle(settlement),
-                    style: TextButton.styleFrom(
-                      foregroundColor: incomeColor(context),
-                      backgroundColor:
-                          incomeColor(context).withValues(alpha: 0.16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+              // Spaced apart so a thumb lands on one row, not between two.
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${settlement.from} → ${settlement.to}',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.5, color: ink),
                       ),
-                      visualDensity: VisualDensity.compact,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: const Size(0, 30),
                     ),
-                    child: const Text('Оплачено'),
-                  ),
-                ],
+                    Text(
+                      currency.format.format(settlement.amount),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: ink,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    TextButton(
+                      onPressed: () => onSettle(settlement),
+                      style: TextButton.styleFrom(
+                        foregroundColor: incomeColor(context),
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 40),
+                      ),
+                      child: const Text('Оплачено'),
+                    ),
+                  ],
+                ),
               ),
           ],
         ],
