@@ -121,7 +121,7 @@ void main() {
         home: HouseholdScreen(canCancel: canCancel, onReady: (_) {}),
       ));
       await tester.pumpAndSettle();
-      expect(find.text('ALTYN'), findsOneWidget,
+      expect(find.text('ОБЩАК'), findsOneWidget,
           reason: 'wordmark missing with canCancel: $canCancel');
       expect(find.text('Единый ритм\nмалых финансов'), findsOneWidget,
           reason: 'tagline missing with canCancel: $canCancel');
@@ -1052,7 +1052,7 @@ void main() {
         return const SizedBox();
       }),
     ));
-    expect(style.fontFamily, 'PlayfairDisplay');
+    expect(style.fontFamily, 'Onest');
     expect(style.fontWeight, FontWeight.w600);
     // Tracking is a share of the size, so the wordmark keeps its rhythm at
     // whichever of the two sizes it is drawn.

@@ -104,7 +104,7 @@ class _AppGateState extends State<AppGate> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'ALTYN',
+                  'ОБЩАК',
                   style: wordmark(
                     context,
                     size: 15,

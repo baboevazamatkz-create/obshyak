@@ -161,15 +161,13 @@ TextStyle microLabel(BuildContext context,
 
 /// The wordmark, and nothing else.
 ///
-/// A high-contrast serif where the whole interface is a sans: the name is
-/// the one place the app says who it is rather than what it is doing, and
-/// the shift in voice is what makes it read as a mark instead of a label.
-/// Semibold, because Playfair's regular goes thin at display sizes and its
-/// bold goes heavy.
+/// Set in the same sans as the rest of the interface, only heavier and
+/// spaced out, so the name reads as a mark rather than body text. Semibold
+/// keeps it from thinning at display sizes.
 TextStyle wordmark(BuildContext context,
         {required double size, Color? color}) =>
     TextStyle(
-      fontFamily: 'PlayfairDisplay',
+      fontFamily: 'Onest',
       fontSize: size,
       fontWeight: FontWeight.w600,
       // Wide enough to space a short all-caps word, narrow enough that the
