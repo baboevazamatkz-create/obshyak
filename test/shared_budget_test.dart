@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:expense_tracker/data/name_store.dart';
 import 'package:expense_tracker/models/currency.dart';
 import 'package:expense_tracker/models/expense.dart';
+import 'package:expense_tracker/models/history.dart';
 import 'package:expense_tracker/models/shared_budget.dart';
 import 'package:expense_tracker/models/shared_split.dart';
 import 'package:expense_tracker/models/transaction_type.dart';
@@ -152,6 +153,70 @@ void main() {
     });
   });
 
+  group('closing a period', () {
+    Expense buy(String who, double amount, {DateTime? archivedAt}) => Expense(
+          id: '$who-$amount-${archivedAt?.day}',
+          amount: amount,
+          date: DateTime(2026, 10, 1),
+          author: who,
+          currency: AppCurrency.kzt,
+          archivedAt: archivedAt,
+        );
+
+    Expense paidBack(String from, String to, double amount) => Expense(
+          id: 'back-$from-$to',
+          amount: amount,
+          date: DateTime(2026, 10, 2),
+          author: from,
+          recipient: to,
+          currency: AppCurrency.kzt,
+          type: TransactionType.transfer,
+        );
+
+    test('an empty period is not closed: there is nothing to put away', () {
+      expect(periodIsClosed(const []), isFalse);
+    });
+
+    test('a period with debts still open stays open', () {
+      expect(periodIsClosed([buy('Азамат', 8000)]), isFalse);
+    });
+
+    test('once every debt is paid back, the period closes', () {
+      expect(
+        periodIsClosed([
+          buy('Азамат', 8000),
+          paidBack('Аслан', 'Азамат', 2000),
+          paidBack('Мухаммад', 'Азамат', 2000),
+          paidBack('Имран', 'Азамат', 2000),
+        ]),
+        isTrue,
+      );
+    });
+
+    test('purchases that even out by themselves close it too', () {
+      expect(
+        periodIsClosed([for (final name in kRoommates) buy(name, 3000)]),
+        isTrue,
+      );
+    });
+
+    test('history groups records by the moment their period closed', () {
+      final first = DateTime(2026, 9, 30);
+      final second = DateTime(2026, 10, 7);
+      final periods = historyPeriods([
+        buy('Азамат', 100, archivedAt: first),
+        buy('Аслан', 200, archivedAt: second),
+        buy('Имран', 300, archivedAt: second),
+        buy('Мухаммад', 999), // still open, not history
+      ]);
+      expect(periods.length, 2);
+      expect(periods.first.closedAt, second, reason: 'latest first');
+      expect(periods.first.records.length, 2);
+      expect(periods.first.sharedTotal, 500);
+      expect(periods.last.records.single.author, 'Азамат');
+    });
+  });
+
   group('Expense storage', () {
     test('round-trips the author and receipt id', () {
       final expense = Expense(
@@ -162,9 +227,11 @@ void main() {
         receiptId: 'r1',
         personal: 300,
         recipient: 'Имран',
+        archivedAt: DateTime(2026, 10, 8, 12),
         currency: AppCurrency.kzt,
       );
       final restored = Expense.fromJson(expense.toJson());
+      expect(restored.archivedAt, DateTime(2026, 10, 8, 12));
       expect(restored.author, 'Аслан');
       expect(restored.receiptId, 'r1');
       expect(restored.personal, 300);
@@ -185,6 +252,7 @@ void main() {
       expect(restored.author, '');
       expect(restored.receiptId, isNull);
       expect(restored.personal, 0);
+      expect(restored.archivedAt, isNull);
     });
 
     test('copyWith stamps the author without touching the rest', () {

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -20,7 +19,9 @@ import '../widgets/app_background_pattern.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/glass.dart';
 import '../widgets/readable_width.dart';
+import '../widgets/receipt_dialog.dart';
 import '../widgets/split_card.dart';
+import 'history_screen.dart';
 import 'scan_flow.dart';
 
 final _monthDividerFormat = DateFormat('LLLL', 'ru');
@@ -78,6 +79,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // gives up on that first wait after a while and offers a retry instead.
   Timer? _firstLoadTimer;
   bool _firstLoadTimedOut = false;
+
+  bool _archiving = false;
 
   @override
   void initState() {
@@ -225,8 +228,8 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Очистить бюджет?'),
         content: const Text(
-          'Все расходы и доходы у всех участников будут удалены безвозвратно. '
-          'Это действие нельзя отменить.',
+          'Все записи, включая историю, будут удалены у всех участников '
+          'безвозвратно. Это действие нельзя отменить.',
         ),
         actions: [
           TextButton(
@@ -268,35 +271,41 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Opens the receipt photo kept for a scanned record. The fetch starts
-  /// before the dialog so that rebuilding the dialog does not fetch again.
-  void _showReceipt(String receiptId) {
-    final photo = _repository.fetchReceipt(kSharedBudgetCode, receiptId);
-    showDialog<void>(
-      context: context,
-      builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.all(12),
-        clipBehavior: Clip.antiAlias,
-        child: FutureBuilder<Uint8List?>(
-          future: photo,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const SizedBox(
-                height: 240,
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            final bytes = snapshot.data;
-            if (bytes == null) {
-              return const SizedBox(
-                height: 160,
-                child: Center(child: Text('Фото не найдено')),
-              );
-            }
-            return InteractiveViewer(child: Image.memory(bytes));
-          },
-        ),
-      ),
+  void _showReceipt(String receiptId) =>
+      showReceiptDialog(context, _repository, receiptId);
+
+  /// Moves the open period to history once everyone is square.
+  ///
+  /// Driven by the snapshot rather than by the button that settled the last
+  /// debt, so it also fires when purchases happen to even out by themselves
+  /// or a deletion squares the flat. The guard keeps one snapshot from
+  /// starting the same archive twice while the first is still being
+  /// written.
+  void _archiveIfSettled(List<Expense> open) {
+    if (_archiving || !periodIsClosed(open)) return;
+    _archiving = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await _repository.archive(
+          kSharedBudgetCode,
+          [for (final expense in open) expense.id],
+          DateTime.now(),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Все в расчёте — период перенесён в историю'),
+          ),
+        );
+      } finally {
+        _archiving = false;
+      }
+    });
+  }
+
+  void _openHistory() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const HistoryScreen()),
     );
   }
 
@@ -401,7 +410,13 @@ class _HomeScreenState extends State<HomeScreen> {
     return StreamBuilder<List<Expense>>(
       stream: _expensesStream,
       builder: (context, snapshot) {
-        final expenses = snapshot.data ?? const <Expense>[];
+        // Only the open period is on this screen; settled ones live in
+        // history.
+        final expenses = [
+          for (final expense in snapshot.data ?? const <Expense>[])
+            if (expense.archivedAt == null) expense,
+        ];
+        if (snapshot.hasData) _archiveIfSettled(expenses);
         // Real data arrived -- the wait that timer was guarding against is
         // over, so it should not fire a stale "no connection" state later.
         if (snapshot.hasData) _firstLoadTimer?.cancel();
@@ -428,6 +443,11 @@ class _HomeScreenState extends State<HomeScreen> {
             title: const Text('Общак'),
             titleSpacing: 24,
             actions: [
+              IconButton(
+                onPressed: _openHistory,
+                icon: const Icon(Icons.history_rounded),
+                tooltip: 'История',
+              ),
               Center(
                 child: Padding(
                   padding: const EdgeInsets.only(right: 20),

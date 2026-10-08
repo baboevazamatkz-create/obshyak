@@ -29,6 +29,10 @@ class Expense {
   /// who paid.
   final String? recipient;
 
+  /// When the period this record belonged to was settled and moved to
+  /// history. Null while the record is part of the open period.
+  final DateTime? archivedAt;
+
   const Expense({
     required this.id,
     required this.amount,
@@ -41,6 +45,7 @@ class Expense {
     this.receiptId,
     this.personal = 0,
     this.recipient,
+    this.archivedAt,
   });
 
   bool get isIncome => type == TransactionType.income;
@@ -64,6 +69,7 @@ class Expense {
         receiptId: receiptId ?? this.receiptId,
         personal: personal,
         recipient: recipient,
+        archivedAt: archivedAt,
       );
 
   Map<String, dynamic> toJson() => {
@@ -78,6 +84,8 @@ class Expense {
         'receiptId': receiptId,
         'personal': personal,
         'recipient': recipient,
+        'archivedAt':
+            archivedAt == null ? null : Timestamp.fromDate(archivedAt!),
       };
 
   factory Expense.fromJson(Map<String, dynamic> json) => Expense(
@@ -94,5 +102,6 @@ class Expense {
         receiptId: json['receiptId'] as String?,
         personal: (json['personal'] as num?)?.toDouble() ?? 0,
         recipient: json['recipient'] as String?,
+        archivedAt: (json['archivedAt'] as Timestamp?)?.toDate(),
       );
 }

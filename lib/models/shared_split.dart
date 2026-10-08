@@ -153,3 +153,10 @@ class _Open {
   double amount;
   _Open(this.name, this.amount);
 }
+
+/// Whether the open period has been settled in full and should move to
+/// history: something was bought for the flat, and nobody owes anybody.
+bool periodIsClosed(List<Expense> open) {
+  final pool = sharedPool(open);
+  return pool.sharedTotal > 0 && pool.isSettled;
+}

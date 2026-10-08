@@ -73,6 +73,25 @@ class ExpenseRepository {
     return data == null ? null : base64Decode(data);
   }
 
+  /// Moves a settled period to history by stamping every one of its
+  /// records with the same [at]. Chunked like [clearAll]: Firestore refuses
+  /// a batch of more than 500 writes.
+  Future<void> archive(
+    String householdCode,
+    List<String> expenseIds,
+    DateTime at,
+  ) async {
+    const chunkSize = 500;
+    final ref = _expensesRef(householdCode);
+    for (var i = 0; i < expenseIds.length; i += chunkSize) {
+      final batch = _firestore.batch();
+      for (final id in expenseIds.skip(i).take(chunkSize)) {
+        batch.update(ref.doc(id), {'archivedAt': Timestamp.fromDate(at)});
+      }
+      await batch.commit();
+    }
+  }
+
   /// Deletes every record in the budget. Firestore refuses a batch of more
   /// than 500 writes, so a budget that has been running for a while is
   /// cleared in chunks.
