@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/currency.dart';
-import '../models/shared_budget.dart';
 import '../models/shared_split.dart';
 import '../theme.dart';
 
@@ -28,7 +27,7 @@ class SplitCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
       decoration: BoxDecoration(
         gradient: heroGradientFor(context),
         borderRadius: BorderRadius.circular(24),
@@ -37,17 +36,16 @@ class SplitCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'ОБЩАК',
-            style: microLabel(
-              context,
-              color: goldFor(context).withValues(alpha: 0.9),
-            ),
+          const Row(
+            children: [
+              Spacer(flex: 4),
+              Expanded(flex: 3, child: _Header('потратил')),
+              Expanded(flex: 3, child: _Header('баланс')),
+            ],
           ),
-          const SizedBox(height: 12),
           for (final person in pool.people)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
                 children: [
                   Expanded(
@@ -56,7 +54,7 @@ class SplitCard extends StatelessWidget {
                       person.name,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                         color: ink,
                       ),
@@ -81,19 +79,13 @@ class SplitCard extends StatelessWidget {
                 ],
               ),
             ),
-          Divider(color: hairlineColor(context), height: 20),
+          Divider(color: hairlineColor(context), height: 12),
           _Line(
             label: 'Общие траты',
             value: currency.format.format(pool.sharedTotal),
             ink: ink,
           ),
           const SizedBox(height: 4),
-          _Line(
-            label: 'Доля каждого (÷ $kRoommateCount)',
-            value: currency.format.format(pool.perPerson),
-            ink: ink,
-          ),
-          const SizedBox(height: 12),
           if (pool.isSettled)
             Text(
               'Все в расчёте',
@@ -107,7 +99,7 @@ class SplitCard extends StatelessWidget {
                 color: goldFor(context).withValues(alpha: 0.9),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 2),
             for (final settlement in pool.settlements)
               Row(
                 children: [
@@ -129,6 +121,12 @@ class SplitCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   TextButton(
                     onPressed: () => onSettle(settlement),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 30),
+                    ),
                     child: const Text('Оплачено'),
                   ),
                 ],
@@ -158,6 +156,24 @@ class SplitCard extends StatelessWidget {
   }
 }
 
+class _Header extends StatelessWidget {
+  final String text;
+
+  const _Header(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      textAlign: TextAlign.right,
+      style: TextStyle(
+        fontSize: 10.5,
+        color: accentForeground(context).withValues(alpha: 0.5),
+      ),
+    );
+  }
+}
+
 class _Figure extends StatelessWidget {
   final String label;
   final String value;
@@ -171,28 +187,22 @@ class _Figure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        FittedBox(
+    return Tooltip(
+      message: label,
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
             value,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13.5,
               fontWeight: FontWeight.w600,
               color: color,
             ),
           ),
         ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: accentForeground(context).withValues(alpha: 0.5),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
