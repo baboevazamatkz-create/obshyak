@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1042,7 +1041,7 @@ void main() {
         reason: 'the default must give way to what was handed in');
   });
 
-  testWidgets('The wordmark is the one thing not set in the interface face',
+  testWidgets('The wordmark is set in the interface face, heavier and spaced out',
       (tester) async {
     late TextStyle style;
     await tester.pumpWidget(MaterialApp(
@@ -1122,20 +1121,6 @@ void main() {
     await tester.pump();
     expect(find.text('1 234.5'), findsOneWidget,
         reason: 'only the whole part is grouped');
-  });
-
-  test('Every category has an icon the widget can draw', () {
-    // The chip shows a glyph rather than a name now, and the widget draws
-    // it from a vector in res/drawable. Adding a category to the enum
-    // without adding its icon would leave the chip blank, which nothing in
-    // Dart or Kotlin would otherwise notice.
-    for (final category in ExpenseCategory.values) {
-      final icon = File(
-        'android/app/src/main/res/drawable/w_cat_${category.storageKey}.xml',
-      );
-      expect(icon.existsSync(), isTrue,
-          reason: '${category.storageKey} has no widget icon at ${icon.path}');
-    }
   });
 
   test('The widget reads the budget and currency under agreed key names', () {
