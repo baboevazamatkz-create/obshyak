@@ -1,7 +1,7 @@
 {
-    "id": "/",
-    "name": "Altyn",
-    "short_name": "Altyn",
+    "id": "/obshyak/",
+    "name": "Общак",
+    "short_name": "Общак",
     "lang": "ru",
     "start_url": ".",
     "scope": ".",

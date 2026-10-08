@@ -29,7 +29,7 @@ class ExpenseTrackerApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeModeController.mode,
       builder: (context, themeMode, _) => MaterialApp(
-        title: 'Altyn',
+        title: 'Общак',
         debugShowCheckedModeBanner: false,
         locale: const Locale('ru'),
         supportedLocales: const [Locale('ru'), Locale('en')],

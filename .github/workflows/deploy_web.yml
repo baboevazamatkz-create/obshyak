@@ -48,7 +48,7 @@ jobs:
       - name: Run tests
         run: flutter test
 
-      # Pages serves this repository at /Project/, so the base href has to
+      # Pages serves this repository at /obshyak/, so the base href has to
       # match or every asset request 404s.
       #
       # SCAN_ENDPOINT is the scanner's address. Not a secret -- it is a
@@ -57,7 +57,7 @@ jobs:
       # appear; see worker/README.md.
       - name: Build web app
         run: |
-          flutter build web --release --base-href /Project/ \
+          flutter build web --release --base-href /obshyak/ \
             --dart-define=SCAN_ENDPOINT="${SCAN_ENDPOINT}"
         env:
           SCAN_ENDPOINT: ${{ vars.SCAN_ENDPOINT }}
