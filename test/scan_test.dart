@@ -337,7 +337,7 @@ void main() {
                       context,
                       currency: AppCurrency.rub,
                       existing: const [],
-                      onAdd: (_) async {},
+                      onAdd: (_, __) async {},
                     ),
                     child: const Text('scan'),
                   ),

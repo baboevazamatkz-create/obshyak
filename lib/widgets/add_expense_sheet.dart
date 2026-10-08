@@ -162,6 +162,10 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         date: _selectedDate,
         currency: widget.currency,
         type: widget.type,
+        // Editing keeps who entered the record and its receipt; the sheet
+        // itself does not know either of them.
+        author: widget.existing?.author ?? '',
+        receiptId: widget.existing?.receiptId,
       ),
     );
     Navigator.of(context).pop();

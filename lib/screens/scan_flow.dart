@@ -33,7 +33,8 @@ class ScanFlow {
     BuildContext context, {
     required AppCurrency currency,
     required List<Expense> existing,
-    required Future<void> Function(List<Expense> expenses) onAdd,
+    required Future<void> Function(List<Expense> expenses, Uint8List? photo)
+        onAdd,
   }) async {
     // Drops focus from whatever field was last typed into -- adding an
     // expense, naming the budget. On the web this also blurs the hidden
@@ -56,6 +57,11 @@ class ScanFlow {
       return;
     }
     if (raw.isEmpty || !context.mounted) return;
+
+    // The photo kept with the records is the first snapshot only: a long
+    // statement is still read in full, but it is saved as one picture.
+    final photo = await compute(prepareReceiptPhoto, raw.first);
+    if (!context.mounted) return;
 
     _showProgress(context);
 
@@ -105,7 +111,7 @@ class ScanFlow {
           duplicates: findDuplicates(result.transactions, existing),
           onConfirm: (expenses) async {
             if (expenses.isEmpty) return;
-            await onAdd(expenses);
+            await onAdd(expenses, photo);
           },
         ),
       ),

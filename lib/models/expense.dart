@@ -13,6 +13,14 @@ class Expense {
   final AppCurrency currency;
   final TransactionType type;
 
+  /// Which of the flatmates entered the record. Empty for records written
+  /// before names existed.
+  final String author;
+
+  /// Id of the receipt photo in the budget's `receipts` collection, when
+  /// the record came from a scan.
+  final String? receiptId;
+
   const Expense({
     required this.id,
     required this.amount,
@@ -21,9 +29,23 @@ class Expense {
     this.note = '',
     this.currency = AppCurrency.rub,
     this.type = TransactionType.expense,
+    this.author = '',
+    this.receiptId,
   });
 
   bool get isIncome => type == TransactionType.income;
+
+  Expense copyWith({String? author, String? receiptId}) => Expense(
+        id: id,
+        amount: amount,
+        date: date,
+        category: category,
+        note: note,
+        currency: currency,
+        type: type,
+        author: author ?? this.author,
+        receiptId: receiptId ?? this.receiptId,
+      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -33,6 +55,8 @@ class Expense {
         'date': Timestamp.fromDate(date),
         'currency': currency.storageKey,
         'type': type.storageKey,
+        'author': author,
+        'receiptId': receiptId,
       };
 
   factory Expense.fromJson(Map<String, dynamic> json) => Expense(
@@ -45,5 +69,7 @@ class Expense {
         date: (json['date'] as Timestamp).toDate(),
         currency: AppCurrencyX.fromStorageKey(json['currency'] as String?),
         type: TransactionTypeX.fromStorageKey(json['type'] as String?),
+        author: json['author'] as String? ?? '',
+        receiptId: json['receiptId'] as String?,
       );
 }

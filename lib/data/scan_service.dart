@@ -202,6 +202,39 @@ List<ScanImage> prepareScanImages(({Uint8List bytes, int maxTiles}) input) {
   return tiles;
 }
 
+/// Width the kept receipt photo is shrunk to. Enough to read the lines of a
+/// receipt when it is opened; the model never sees this copy.
+const int kReceiptWidth = 800;
+
+/// A Firestore document holds one megabyte, and the photo is stored as
+/// base64, which adds a third. Past this the photo is not kept at all rather
+/// than making the record it belongs to fail to save.
+const int kReceiptMaxBytes = 600 * 1024;
+
+/// A small JPEG of the snapshot, kept beside the records it produced so the
+/// original can be looked at later. Null when it cannot be decoded or is
+/// still too large after shrinking.
+Uint8List? prepareReceiptPhoto(Uint8List bytes) {
+  // The decoder throws rather than returning null on some truncated input,
+  // and a receipt photo is optional, so any failure just means no photo.
+  final img.Image? decoded;
+  try {
+    decoded = img.decodeImage(bytes);
+  } catch (_) {
+    return null;
+  }
+  if (decoded == null) return null;
+  final image = decoded.width > kReceiptWidth
+      ? img.copyResize(
+          decoded,
+          width: kReceiptWidth,
+          interpolation: img.Interpolation.average,
+        )
+      : decoded;
+  final jpeg = Uint8List.fromList(img.encodeJpg(image, quality: 70));
+  return jpeg.length <= kReceiptMaxBytes ? jpeg : null;
+}
+
 ScanImage _encode(img.Image image) => ScanImage(
       // 85 rather than the usual 80: the subject is small type, and the
       // artefacts of a harder compression land exactly on the digits.

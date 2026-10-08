@@ -8,5 +8,8 @@ service cloud.firestore {
     match /households/{householdId}/settings/{document} {
       allow read, write: if request.auth != null;
     }
+    match /households/{householdId}/receipts/{receiptId} {
+      allow read, write: if request.auth != null;
+    }
   }
 }

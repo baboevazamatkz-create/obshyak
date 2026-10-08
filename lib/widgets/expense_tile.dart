@@ -12,6 +12,7 @@ final _dateFormat = DateFormat('d MMM', 'ru');
 class ExpenseTile extends StatelessWidget {
   final Expense expense;
   final AppCurrency currency;
+  final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
   /// The amount to display, if it differs from [expense.amount] -- used
@@ -35,6 +36,7 @@ class ExpenseTile extends StatelessWidget {
     super.key,
     required this.expense,
     required this.currency,
+    this.onTap,
     this.onLongPress,
     this.amountOverride,
     this.isApproximate = false,
@@ -58,6 +60,7 @@ class ExpenseTile extends StatelessWidget {
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
+          onTap: onTap,
           onLongPress: onLongPress,
           borderRadius: BorderRadius.circular(14),
           child: Padding(

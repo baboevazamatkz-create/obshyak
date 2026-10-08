@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/expense.dart';
@@ -5,12 +8,16 @@ import '../models/expense.dart';
 class ExpenseRepository {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
+  DocumentReference<Map<String, dynamic>> _budgetRef(String householdCode) =>
+      _firestore.collection('households').doc(householdCode);
+
   CollectionReference<Map<String, dynamic>> _expensesRef(
           String householdCode) =>
-      _firestore
-          .collection('households')
-          .doc(householdCode)
-          .collection('expenses');
+      _budgetRef(householdCode).collection('expenses');
+
+  CollectionReference<Map<String, dynamic>> _receiptsRef(
+          String householdCode) =>
+      _budgetRef(householdCode).collection('receipts');
 
   Stream<List<Expense>> watchExpenses(String householdCode) {
     return _expensesRef(householdCode)
@@ -42,5 +49,42 @@ class ExpenseRepository {
 
   Future<void> deleteExpense(String householdCode, String expenseId) {
     return _expensesRef(householdCode).doc(expenseId).delete();
+  }
+
+  /// Stores a receipt photo under [receiptId]. Kept apart from the records
+  /// so the list never has to download a picture to show a row.
+  Future<void> addReceipt(
+    String householdCode,
+    String receiptId,
+    Uint8List jpeg,
+  ) {
+    return _receiptsRef(householdCode).doc(receiptId).set({
+      'data': base64Encode(jpeg),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Null when the photo is gone, which is the case for a receipt whose
+  /// budget was cleared.
+  Future<Uint8List?> fetchReceipt(
+      String householdCode, String receiptId) async {
+    final snapshot = await _receiptsRef(householdCode).doc(receiptId).get();
+    final data = snapshot.data()?['data'] as String?;
+    return data == null ? null : base64Decode(data);
+  }
+
+  /// Deletes every record in the budget. Firestore refuses a batch of more
+  /// than 500 writes, so a budget that has been running for a while is
+  /// cleared in chunks.
+  Future<void> clearAll(String householdCode) async {
+    final snapshot = await _expensesRef(householdCode).get();
+    const chunkSize = 500;
+    for (var i = 0; i < snapshot.docs.length; i += chunkSize) {
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs.skip(i).take(chunkSize)) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
   }
 }

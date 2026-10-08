@@ -23,13 +23,9 @@ dependencies:
   firebase_core: ^3.8.0
   firebase_auth: ^5.3.3
   cloud_firestore: ^5.5.0
-  fl_chart: ^0.69.0
-  showcaseview: ^5.1.0
   image_picker: ^1.2.3
   http: ^1.6.0
   image: ^4.9.2
-  speech_to_text: ^7.5.0
-  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
-import 'data/household_repository.dart';
-import 'models/household.dart';
+import 'data/name_store.dart';
 import 'screens/home_screen.dart';
-import 'screens/household_screen.dart';
+import 'screens/name_picker_screen.dart';
 import 'theme.dart';
 import 'widgets/app_background_pattern.dart';
 
+/// Decides what the app opens on: the name picker until this phone has
+/// been given a flatmate's name, then the shared budget.
 class AppGate extends StatefulWidget {
   const AppGate({super.key});
 
@@ -15,9 +16,7 @@ class AppGate extends StatefulWidget {
 }
 
 class _AppGateState extends State<AppGate> {
-  final _repository = HouseholdRepository();
-  List<Household> _households = [];
-  String? _activeCode;
+  String? _name;
   bool _loading = true;
 
   @override
@@ -27,69 +26,18 @@ class _AppGateState extends State<AppGate> {
   }
 
   Future<void> _load() async {
-    final households = await _repository.loadHouseholds();
-    final activeCode = await _repository.loadActiveCode();
+    final name = await NameStore.load();
     if (!mounted) return;
     setState(() {
-      _households = households;
-      _activeCode = households.any((h) => h.code == activeCode)
-          ? activeCode
-          : (households.isNotEmpty ? households.first.code : null);
+      _name = name;
       _loading = false;
     });
   }
 
-  Future<void> _onHouseholdReady(Household household) async {
-    await _repository.addHousehold(household);
-    await _repository.setActiveCode(household.code);
+  Future<void> _pick(String name) async {
+    await NameStore.save(name);
     if (!mounted) return;
-    setState(() {
-      if (!_households.any((h) => h.code == household.code)) {
-        _households = [..._households, household];
-      }
-      _activeCode = household.code;
-    });
-  }
-
-  Future<void> _switchHousehold(String code) async {
-    await _repository.setActiveCode(code);
-    if (!mounted) return;
-    setState(() => _activeCode = code);
-  }
-
-  /// Leaves a budget: it goes from this device's list, and the next one
-  /// in the list takes over. Leaving the last one puts the gate back on
-  /// the screen that creates or joins one.
-  Future<void> _leaveHousehold(String code) async {
-    await _repository.removeHousehold(code);
-    final remaining = _households.where((h) => h.code != code).toList();
-    final nextCode = _activeCode == code
-        ? (remaining.isEmpty ? null : remaining.first.code)
-        : _activeCode;
-    if (nextCode == null) {
-      await _repository.clearActiveCode();
-    } else {
-      await _repository.setActiveCode(nextCode);
-    }
-    if (!mounted) return;
-    setState(() {
-      _households = remaining;
-      _activeCode = nextCode;
-    });
-  }
-
-  void _openAddHouseholdFlow() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => HouseholdScreen(
-          canCancel: true,
-          onReady: (household) async {
-            await _onHouseholdReady(household);
-            if (mounted) Navigator.of(context).pop();
-          },
-        ),
-      ),
-    );
+    setState(() => _name = name);
   }
 
   @override
@@ -100,55 +48,22 @@ class _AppGateState extends State<AppGate> {
       return Scaffold(
         body: AppBackgroundPattern(
           child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'ОБЩАК',
-                  style: wordmark(
-                    context,
-                    size: 15,
-                    color: goldFor(context).withValues(alpha: 0.92),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Image.asset(
-                  'assets/brand_mark.png',
-                  width: 88,
-                  height: 88,
-                  filterQuality: FilterQuality.medium,
-                ),
-                const SizedBox(height: 26),
-                SizedBox(
-                  width: 22,
-                  height: 22,
-                  // backgroundColor draws the full ring, not just the
-                  // moving arc -- without it, an indeterminate spinner
-                  // spends part of its cycle as a short stray dash rather
-                  // than a circle with a bright segment sweeping round it.
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    backgroundColor: goldFor(context).withValues(alpha: 0.16),
-                    color: goldFor(context),
-                  ),
-                ),
-              ],
+            child: Text(
+              'ОБЩАК',
+              style: wordmark(
+                context,
+                size: 15,
+                color: goldFor(context).withValues(alpha: 0.92),
+              ),
             ),
           ),
         ),
       );
     }
-    final activeCode = _activeCode;
-    if (activeCode == null) {
-      return HouseholdScreen(onReady: _onHouseholdReady);
+    final name = _name;
+    if (name == null) {
+      return NamePickerScreen(onPicked: _pick);
     }
-    final activeHousehold = _households.firstWhere((h) => h.code == activeCode);
-    return HomeScreen(
-      household: activeHousehold,
-      households: _households,
-      onSwitchHousehold: _switchHousehold,
-      onAddHousehold: _openAddHouseholdFlow,
-      onLeaveHousehold: _leaveHousehold,
-    );
+    return HomeScreen(myName: name);
   }
 }
