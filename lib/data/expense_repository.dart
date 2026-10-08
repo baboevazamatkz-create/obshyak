@@ -73,6 +73,14 @@ class ExpenseRepository {
     return data == null ? null : base64Decode(data);
   }
 
+  /// The recipient's word that a transfer arrived; from here on it moves
+  /// balances.
+  Future<void> confirmTransfer(String householdCode, String expenseId) {
+    return _expensesRef(householdCode)
+        .doc(expenseId)
+        .update({'confirmed': true});
+  }
+
   /// Moves a settled period to history by stamping every one of its
   /// records with the same [at]. Chunked like [clearAll]: Firestore refuses
   /// a batch of more than 500 writes.

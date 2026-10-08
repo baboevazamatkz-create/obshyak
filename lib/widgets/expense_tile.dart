@@ -46,11 +46,13 @@ class ExpenseTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isIncome = expense.isIncome;
     final isTransfer = expense.isTransfer;
-    final accent = isTransfer
-        ? goldFor(context)
-        : isIncome
-            ? incomeColor(context)
-            : expenseColor(context);
+    final accent = expense.isPendingTransfer
+        ? kPendingColor
+        : isTransfer
+            ? goldFor(context)
+            : isIncome
+                ? incomeColor(context)
+                : expenseColor(context);
     final icon = isTransfer
         ? Icons.swap_horiz_rounded
         : isIncome
@@ -62,7 +64,7 @@ class ExpenseTile extends StatelessWidget {
             ? 'Доход'
             : (expense.note.isNotEmpty ? expense.note : 'Покупка');
     final details = [
-      if (isTransfer) 'вернул долг',
+      if (isTransfer) expense.confirmed ? 'вернул долг' : 'ждёт подтверждения',
       if (!isTransfer && expense.author.isNotEmpty) expense.author,
       if (isIncome && expense.note.isNotEmpty) expense.note,
       if (expense.personal > 0)

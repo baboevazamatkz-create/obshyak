@@ -79,6 +79,8 @@ SharedPool sharedPool(List<Expense> expenses) {
 
   for (final expense in expenses) {
     if (expense.isTransfer) {
+      // Not money until the recipient says it arrived.
+      if (!expense.confirmed) continue;
       final to = expense.recipient;
       if (sent.containsKey(expense.author) && received.containsKey(to)) {
         sent[expense.author] = sent[expense.author]! + expense.amount;

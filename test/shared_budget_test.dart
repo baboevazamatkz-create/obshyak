@@ -81,6 +81,24 @@ void main() {
       expect(pool.settlements.any((s) => s.from == 'Аслан'), isFalse);
     });
 
+    test('a transfer not yet confirmed moves no balance', () {
+      final pool = sharedPool([
+        buy('Азамат', 8000),
+        Expense(
+          id: 'pending',
+          amount: 2000,
+          date: DateTime(2026, 10, 2),
+          author: 'Аслан',
+          recipient: 'Азамат',
+          currency: AppCurrency.kzt,
+          type: TransactionType.transfer,
+          confirmed: false,
+        ),
+      ]);
+      expect(person(pool, 'Аслан').balance, -2000);
+      expect(pool.settlements.any((s) => s.from == 'Аслан'), isTrue);
+    });
+
     test('everyone paying their quarter leaves nothing to settle', () {
       final pool = sharedPool([
         for (final name in kRoommates) buy(name, 3000),
@@ -228,9 +246,11 @@ void main() {
         personal: 300,
         recipient: 'Имран',
         archivedAt: DateTime(2026, 10, 8, 12),
+        confirmed: false,
         currency: AppCurrency.kzt,
       );
       final restored = Expense.fromJson(expense.toJson());
+      expect(restored.confirmed, isFalse);
       expect(restored.archivedAt, DateTime(2026, 10, 8, 12));
       expect(restored.author, 'Аслан');
       expect(restored.receiptId, 'r1');
@@ -253,6 +273,7 @@ void main() {
       expect(restored.receiptId, isNull);
       expect(restored.personal, 0);
       expect(restored.archivedAt, isNull);
+      expect(restored.confirmed, isTrue, reason: 'old transfers count');
     });
 
     test('copyWith stamps the author without touching the rest', () {
@@ -318,51 +339,98 @@ void main() {
     expect(picked, 'Аслан');
   });
 
-  testWidgets('the pool card lists who pays whom and reports a settle tap',
-      (tester) async {
-    final pool = sharedPool([
-      Expense(
-        id: 'food',
-        amount: 8000,
-        date: DateTime(2026, 10, 2),
-        author: 'Азамат',
-        currency: AppCurrency.kzt,
-      ),
-    ]);
-    Settlement? tapped;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: SplitCard(
-            pool: pool,
-            currency: AppCurrency.kzt,
-            onSettle: (s) => tapped = s,
+  group('the pool card', () {
+    final purchase = Expense(
+      id: 'food',
+      amount: 8000,
+      date: DateTime(2026, 10, 2),
+      author: 'Азамат',
+      currency: AppCurrency.kzt,
+    );
+    final sent = Expense(
+      id: 'sent',
+      amount: 2000,
+      date: DateTime(2026, 10, 3),
+      author: 'Аслан',
+      recipient: 'Азамат',
+      currency: AppCurrency.kzt,
+      type: TransactionType.transfer,
+      confirmed: false,
+    );
+
+    Future<void> pump(
+      WidgetTester tester, {
+      required String me,
+      List<Expense> pending = const [],
+      ValueChanged<Settlement>? onPaid,
+      ValueChanged<Expense>? onConfirm,
+    }) {
+      return tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SplitCard(
+              pool: sharedPool([purchase, ...pending]),
+              currency: AppCurrency.kzt,
+              myName: me,
+              pending: pending,
+              onPaid: onPaid ?? (_) {},
+              onConfirm: onConfirm ?? (_) {},
+            ),
           ),
         ),
-      ),
-    ));
+      ));
+    }
 
-    expect(find.text('Аслан → Азамат'), findsOneWidget);
-    expect(find.text('Оплачено'), findsNWidgets(3));
-    await tester.tap(find.text('Оплачено').first);
-    expect(tapped, isNotNull);
-    expect(tapped!.to, 'Азамат');
-  });
+    testWidgets('only the payer can mark their own row as paid',
+        (tester) async {
+      Settlement? paid;
+      await pump(tester, me: 'Аслан', onPaid: (s) => paid = s);
 
-  testWidgets('a settled flat says so instead of listing transfers',
-      (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: SplitCard(
-            pool: sharedPool(const []),
-            currency: AppCurrency.kzt,
-            onSettle: (_) {},
+      expect(find.text('Аслан → Азамат'), findsOneWidget);
+      expect(find.text('Оплачено'), findsOneWidget);
+      expect(find.text('не оплачено'), findsNWidgets(2));
+      await tester.tap(find.text('Оплачено'));
+      expect(paid!.from, 'Аслан');
+      expect(paid!.to, 'Азамат');
+    });
+
+    testWidgets('a pending transfer waits, yellow, on the payer\'s phone',
+        (tester) async {
+      await pump(tester, me: 'Аслан', pending: [sent]);
+      expect(find.text('ждёт подтверждения'), findsOneWidget);
+      expect(find.text('Оплачено'), findsNothing);
+    });
+
+    testWidgets('the recipient confirms a pending transfer', (tester) async {
+      Expense? confirmed;
+      await pump(
+        tester,
+        me: 'Азамат',
+        pending: [sent],
+        onConfirm: (e) => confirmed = e,
+      );
+      expect(find.text('Подтвердить'), findsOneWidget);
+      await tester.tap(find.text('Подтвердить'));
+      expect(confirmed!.id, 'sent');
+    });
+
+    testWidgets('a settled flat says so instead of listing transfers',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SplitCard(
+              pool: sharedPool(const []),
+              currency: AppCurrency.kzt,
+              myName: 'Аслан',
+              pending: const [],
+              onPaid: (_) {},
+              onConfirm: (_) {},
+            ),
           ),
         ),
-      ),
-    ));
-    expect(find.text('Все в расчёте'), findsOneWidget);
-    expect(find.text('Оплачено'), findsNothing);
+      ));
+      expect(find.text('Все в расчёте'), findsOneWidget);
+    });
   });
 }

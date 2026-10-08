@@ -124,17 +124,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Records that [settlement] has been paid, after asking: anyone can mark
-  /// it, so the dialog spells out who paid whom.
-  Future<void> _confirmSettlement(Settlement settlement) async {
-    final amount = kBudgetCurrency.format.format(settlement.amount);
-    final confirmed = await showDialog<bool>(
+  Future<bool> _ask(String title, String body, String yes) async {
+    final answer = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Перевод сделан?'),
-        content: Text(
-          '${settlement.from} перевёл ${settlement.to} $amount.',
-        ),
+        title: Text(title),
+        content: Text(body),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -142,12 +137,25 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Да, оплачено'),
+            child: Text(yes),
           ),
         ],
       ),
     );
-    if (confirmed != true) return;
+    return answer == true;
+  }
+
+  /// The payer says they sent [settlement]. It is written as a pending
+  /// transfer that moves no balance until the recipient confirms it.
+  Future<void> _markPaid(Settlement settlement) async {
+    final amount = kBudgetCurrency.format.format(settlement.amount);
+    final sure = await _ask(
+      'Перевод отправлен?',
+      'Вы перевели ${settlement.to} $amount. '
+          'Долг закроется, когда ${settlement.to} подтвердит.',
+      'Да, отправил',
+    );
+    if (!sure) return;
     await _addExpense(Expense(
       id: const Uuid().v4(),
       amount: settlement.amount,
@@ -156,7 +164,20 @@ class _HomeScreenState extends State<HomeScreen> {
       type: TransactionType.transfer,
       author: settlement.from,
       recipient: settlement.to,
+      confirmed: false,
     ));
+  }
+
+  /// The recipient confirms that a pending transfer arrived.
+  Future<void> _confirmReceived(Expense transfer) async {
+    final amount = kBudgetCurrency.format.format(transfer.amount);
+    final sure = await _ask(
+      'Деньги пришли?',
+      '${transfer.author} перевёл вам $amount.',
+      'Да, получил',
+    );
+    if (!sure) return;
+    await _repository.confirmTransfer(kSharedBudgetCode, transfer.id);
   }
 
   Future<void> _openScanner(List<Expense> expenses) async {
@@ -522,7 +543,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: SplitCard(
                             pool: pool,
                             currency: kBudgetCurrency,
-                            onSettle: _confirmSettlement,
+                            myName: widget.myName,
+                            pending: [
+                              for (final expense in expenses)
+                                if (expense.isPendingTransfer) expense,
+                            ],
+                            onPaid: _markPaid,
+                            onConfirm: _confirmReceived,
                           ),
                         ),
                         Expanded(

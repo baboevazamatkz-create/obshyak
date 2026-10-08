@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/currency.dart';
+import '../models/expense.dart';
 import '../models/shared_split.dart';
 import '../theme.dart';
 
@@ -11,15 +12,38 @@ class SplitCard extends StatelessWidget {
   final SharedPool pool;
   final AppCurrency currency;
 
-  /// Records that a suggested transfer has been paid.
-  final ValueChanged<Settlement> onSettle;
+  /// The flatmate using this phone. Only the payer can say a transfer was
+  /// sent, and only the recipient can confirm it arrived.
+  final String myName;
+
+  /// Transfers the payer marked as sent that are waiting on the recipient.
+  final List<Expense> pending;
+
+  /// The payer says they sent [Settlement].
+  final ValueChanged<Settlement> onPaid;
+
+  /// The recipient confirms a pending transfer arrived.
+  final ValueChanged<Expense> onConfirm;
 
   const SplitCard({
     super.key,
     required this.pool,
     required this.currency,
-    required this.onSettle,
+    required this.myName,
+    required this.pending,
+    required this.onPaid,
+    required this.onConfirm,
   });
+
+  Expense? _pendingFor(Settlement settlement) {
+    for (final transfer in pending) {
+      if (transfer.author == settlement.from &&
+          transfer.recipient == settlement.to) {
+        return transfer;
+      }
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -122,27 +146,7 @@ class SplitCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    TextButton(
-                      onPressed: () => onSettle(settlement),
-                      style: TextButton.styleFrom(
-                        foregroundColor: incomeColor(context),
-                        backgroundColor: Colors.transparent,
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        minimumSize: const Size(0, 26),
-                      ).copyWith(
-                        // Only a press tints the button. On the web a tapped
-                        // button keeps focus after the dialog closes, and the
-                        // default focus tint read as a green fill.
-                        overlayColor: WidgetStateProperty.resolveWith(
-                          (states) => states.contains(WidgetState.pressed)
-                              ? incomeColor(context).withValues(alpha: 0.12)
-                              : Colors.transparent,
-                        ),
-                      ),
-                      child: const Text('Оплачено'),
-                    ),
+                    _action(context, settlement),
                   ],
                 ),
               ),
@@ -150,6 +154,32 @@ class SplitCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// What the row offers this phone: the payer marks it sent, the
+  /// recipient confirms it, everyone else just sees where it stands.
+  Widget _action(BuildContext context, Settlement settlement) {
+    final waiting = _pendingFor(settlement);
+    if (waiting == null) {
+      if (myName == settlement.from) {
+        return _SettleButton(
+          label: 'Оплачено',
+          color: incomeColor(context),
+          onPressed: () => onPaid(settlement),
+        );
+      }
+      return _Status(
+          'не оплачено', accentForeground(context).withValues(alpha: 0.45));
+    }
+    if (myName == settlement.to) {
+      return _SettleButton(
+        label: 'Подтвердить',
+        color: kPendingColor,
+        filled: true,
+        onPressed: () => onConfirm(waiting),
+      );
+    }
+    return const _Status('ждёт подтверждения', kPendingColor, filled: true);
   }
 
   String _signed(double balance) {
@@ -168,6 +198,73 @@ class SplitCard extends StatelessWidget {
     if (balance >= kSettledThreshold) return incomeColor(context);
     if (balance <= -kSettledThreshold) return expenseColor(context);
     return accentForeground(context).withValues(alpha: 0.6);
+  }
+}
+
+/// A compact text button that tints only while pressed. On the web a
+/// tapped button keeps focus after the dialog closes, and the default
+/// focus tint read as a coloured fill.
+class _SettleButton extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool filled;
+  final VoidCallback onPressed;
+
+  const _SettleButton({
+    required this.label,
+    required this.color,
+    required this.onPressed,
+    this.filled = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: filled ? const Color(0xFF141318) : color,
+        backgroundColor: filled ? color : Colors.transparent,
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 26),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ).copyWith(
+        overlayColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.pressed)
+              ? color.withValues(alpha: 0.18)
+              : Colors.transparent,
+        ),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+/// Where a transfer stands, for whoever cannot act on it from this phone.
+class _Status extends StatelessWidget {
+  final String text;
+  final Color color;
+  final bool filled;
+
+  const _Status(this.text, this.color, {this.filled = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: filled
+          ? BoxDecoration(
+              color: color.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(8),
+            )
+          : null,
+      child: Text(
+        text,
+        style:
+            TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500),
+      ),
+    );
   }
 }
 

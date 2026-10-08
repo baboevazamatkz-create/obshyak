@@ -33,6 +33,12 @@ class Expense {
   /// history. Null while the record is part of the open period.
   final DateTime? archivedAt;
 
+  /// Transfer only: false from the moment the payer says they paid until
+  /// the recipient confirms the money arrived. An unconfirmed transfer
+  /// moves no balance. Older transfers, made before confirmation existed,
+  /// read as confirmed.
+  final bool confirmed;
+
   const Expense({
     required this.id,
     required this.amount,
@@ -46,10 +52,12 @@ class Expense {
     this.personal = 0,
     this.recipient,
     this.archivedAt,
+    this.confirmed = true,
   });
 
   bool get isIncome => type == TransactionType.income;
   bool get isTransfer => type == TransactionType.transfer;
+  bool get isPendingTransfer => isTransfer && !confirmed;
 
   /// What goes into the flat's split: the receipt minus the personal part.
   double get sharedAmount {
@@ -70,6 +78,7 @@ class Expense {
         personal: personal,
         recipient: recipient,
         archivedAt: archivedAt,
+        confirmed: confirmed,
       );
 
   Map<String, dynamic> toJson() => {
@@ -86,6 +95,7 @@ class Expense {
         'recipient': recipient,
         'archivedAt':
             archivedAt == null ? null : Timestamp.fromDate(archivedAt!),
+        'confirmed': confirmed,
       };
 
   factory Expense.fromJson(Map<String, dynamic> json) => Expense(
@@ -103,5 +113,6 @@ class Expense {
         personal: (json['personal'] as num?)?.toDouble() ?? 0,
         recipient: json['recipient'] as String?,
         archivedAt: (json['archivedAt'] as Timestamp?)?.toDate(),
+        confirmed: json['confirmed'] as bool? ?? true,
       );
 }

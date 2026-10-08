@@ -150,6 +150,10 @@ Color appBarGlassTint(BuildContext context) => _isDark(context)
 
 /// Small, letterspaced, uppercase — the label style that does most of the
 /// work in making a layout feel considered rather than default.
+/// Something waiting on someone else: a transfer the payer marked as sent
+/// that the recipient has not confirmed yet.
+const Color kPendingColor = Color(0xFFE2B33C);
+
 TextStyle microLabel(BuildContext context,
         {Color? color, double size = 10.5}) =>
     TextStyle(
