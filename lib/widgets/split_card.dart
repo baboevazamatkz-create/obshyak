@@ -64,7 +64,7 @@ class SplitCard extends StatelessWidget {
                     flex: 3,
                     child: _Figure(
                       label: 'потратил',
-                      value: currency.format.format(person.paid),
+                      value: currency.format.format(person.spent),
                       color: ink.withValues(alpha: 0.85),
                     ),
                   ),

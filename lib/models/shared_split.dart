@@ -15,6 +15,10 @@ class PoolPerson {
   /// Positive: the others owe them this much. Negative: they owe it.
   final double balance;
 
+  /// What they have actually spent on the flat: their purchases, plus debts
+  /// they paid back, minus what was paid back to them.
+  double get spent => paid + sent - received;
+
   const PoolPerson({
     required this.name,
     required this.paid,

@@ -74,6 +74,9 @@ void main() {
       ]);
       expect(person(pool, 'Аслан').balance, 0);
       expect(person(pool, 'Азамат').balance, 4000);
+      // The 2 000 paid back is Аслан's spending now, and no longer Азамат's.
+      expect(person(pool, 'Аслан').spent, 2000);
+      expect(person(pool, 'Азамат').spent, 6000);
       expect(pool.settlements.any((s) => s.from == 'Аслан'), isFalse);
     });
 
