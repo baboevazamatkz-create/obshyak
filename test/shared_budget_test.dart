@@ -23,73 +23,117 @@ Expense _spend(String id, double amount, DateTime date) => Expense(
       currency: AppCurrency.kzt,
     );
 
-Expense _income(String id, double amount, DateTime date) => Expense(
-      id: id,
-      amount: amount,
-      date: date,
-      currency: AppCurrency.kzt,
-      type: TransactionType.income,
-    );
-
 void main() {
-  group('sharedSplit', () {
-    test('with no income yet, every expense counts and is split four ways', () {
-      final split = sharedSplit(
-        [
-          _spend('a', 4000, DateTime(2026, 9, 1)),
-          _spend('b', 2000, DateTime(2026, 9, 2)),
-        ],
-        people: kRoommateCount,
-      );
-      expect(split.total, 6000);
-      expect(split.perPerson, 1500);
-      expect(split.since, isNull);
+  group('sharedPool', () {
+    Expense sharedIncome(String id, double amount, DateTime date) => Expense(
+          id: id,
+          amount: amount,
+          date: date,
+          currency: AppCurrency.kzt,
+          type: TransactionType.income,
+          shared: true,
+        );
+
+    Expense soloIncome(String id, String who, double amount, DateTime date) =>
+        Expense(
+          id: id,
+          amount: amount,
+          date: date,
+          author: who,
+          currency: AppCurrency.kzt,
+          type: TransactionType.income,
+        );
+
+    Expense spendBy(String id, String who, double amount, DateTime date) =>
+        Expense(
+          id: id,
+          amount: amount,
+          date: date,
+          author: who,
+          currency: AppCurrency.kzt,
+        );
+
+    PoolPerson person(SharedPool pool, String name) =>
+        pool.people.singleWhere((p) => p.name == name);
+
+    test('a shared income is split four ways and counts as each share', () {
+      final pool = sharedPool([
+        sharedIncome('pool', 60000, DateTime(2026, 10, 1)),
+        spendBy('food', 'Азамат', 8000, DateTime(2026, 10, 2)),
+      ]);
+      expect(person(pool, 'Азамат').contributed, 15000);
+      expect(person(pool, 'Аслан').contributed, 15000);
+      expect(pool.contributedTotal, 60000);
+      expect(pool.spentTotal, 8000);
+      expect(pool.remaining, 52000);
+      expect(pool.perPerson, 2000);
+      expect(person(pool, 'Азамат').spent, 8000);
+      expect(person(pool, 'Аслан').spent, 0);
     });
 
-    test('an income starts the count over: earlier spending drops out', () {
-      final split = sharedSplit(
-        [
-          _spend('late', 1000, DateTime(2026, 10, 3)),
-          _income('pool', 50000, DateTime(2026, 10, 2)),
-          _spend('early', 9000, DateTime(2026, 10, 1)),
-        ],
-        people: kRoommateCount,
-      );
-      expect(split.total, 1000);
-      expect(split.perPerson, 250);
-      expect(split.since, DateTime(2026, 10, 2));
+    test('a solo income belongs to whoever entered it', () {
+      final pool = sharedPool([
+        soloIncome('mine', 'Имран', 5000, DateTime(2026, 10, 1)),
+      ]);
+      expect(person(pool, 'Имран').contributed, 5000);
+      expect(person(pool, 'Аслан').contributed, 0);
+      expect(pool.biggestContributors, ['Имран']);
     });
 
-    test('income is never added to the total, even after the last spend', () {
-      final split = sharedSplit(
-        [
-          _income('pool', 50000, DateTime(2026, 10, 2)),
-          _spend('x', 800, DateTime(2026, 10, 3)),
-        ],
-        people: kRoommateCount,
-      );
-      expect(split.total, 800);
-    });
-
-    test('the most recent income decides the reset, whatever the list order',
+    test('the latest shared income opens the period; older spending drops out',
         () {
-      final split = sharedSplit(
-        [
-          _income('older', 1, DateTime(2026, 9, 1)),
-          _spend('mid', 300, DateTime(2026, 9, 5)),
-          _income('newer', 1, DateTime(2026, 9, 10)),
-          _spend('after', 700, DateTime(2026, 9, 12)),
-        ],
-        people: kRoommateCount,
-      );
-      expect(split.total, 700);
-      expect(split.since, DateTime(2026, 9, 10));
+      final pool = sharedPool([
+        spendBy('late', 'Аслан', 1000, DateTime(2026, 10, 3)),
+        sharedIncome('pool', 40000, DateTime(2026, 10, 2)),
+        spendBy('early', 'Азамат', 9000, DateTime(2026, 10, 1)),
+      ]);
+      expect(pool.since, DateTime(2026, 10, 2));
+      expect(pool.spentTotal, 1000);
+      expect(person(pool, 'Азамат').spent, 0);
+      expect(person(pool, 'Аслан').spent, 1000);
     });
 
-    test('an empty budget splits to zero rather than failing', () {
-      final split = sharedSplit(const [], people: kRoommateCount);
-      expect(split.total, 0);
-      expect(split.perPerson, 0);
+    test('a solo income from before the period opening is not counted', () {
+      final pool = sharedPool([
+        sharedIncome('pool', 40000, DateTime(2026, 10, 5)),
+        soloIncome('old', 'Имран', 9000, DateTime(2026, 10, 1)),
+      ]);
+      // Only Имран's share of the shared income counts, not the old 9 000.
+      expect(person(pool, 'Имран').contributed, 10000);
+      expect(pool.biggestContributors, isEmpty);
+    });
+
+    test('with no shared income yet, the whole history counts', () {
+      final pool = sharedPool([
+        spendBy('a', 'Азамат', 400, DateTime(2026, 9, 1)),
+        soloIncome('b', 'Аслан', 1000, DateTime(2026, 9, 2)),
+      ]);
+      expect(pool.since, isNull);
+      expect(pool.spentTotal, 400);
+      expect(pool.remaining, 600);
+    });
+
+    test('when one person put in more on their own, they are marked as bigger',
+        () {
+      final pool = sharedPool([
+        sharedIncome('b', 4000, DateTime(2026, 10, 2)),
+        soloIncome('a', 'Мухаммад', 3000, DateTime(2026, 10, 3)),
+      ]);
+      expect(pool.biggestContributors, ['Мухаммад']);
+    });
+
+    test('equal contributions mark nobody as bigger', () {
+      final pool = sharedPool([
+        sharedIncome('pool', 80000, DateTime(2026, 10, 1)),
+      ]);
+      expect(pool.biggestContributors, isEmpty);
+    });
+
+    test('an empty budget totals to zero rather than failing', () {
+      final pool = sharedPool(const []);
+      expect(pool.spentTotal, 0);
+      expect(pool.perPerson, 0);
+      expect(pool.people.length, kRoommateCount);
     });
   });
 
@@ -186,18 +230,35 @@ void main() {
     expect(picked, 'Аслан');
   });
 
-  testWidgets('the split card shows each person\'s share in tenge',
+  testWidgets('the pool card shows each person\'s share in tenge',
       (tester) async {
-    await tester.pumpWidget(const MaterialApp(
+    final pool = sharedPool([
+      Expense(
+        id: 'pool',
+        amount: 40000,
+        date: DateTime(2026, 10, 1),
+        author: 'Азамат',
+        currency: AppCurrency.kzt,
+        type: TransactionType.income,
+        shared: true,
+      ),
+      Expense(
+        id: 'food',
+        amount: 10000,
+        date: DateTime(2026, 10, 2),
+        author: 'Аслан',
+        currency: AppCurrency.kzt,
+      ),
+    ]);
+    await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: SplitCard(
-          split: SharedSplit(total: 10000, perPerson: 2500, since: null),
-          currency: AppCurrency.kzt,
-        ),
+        body: SplitCard(pool: pool, currency: AppCurrency.kzt),
       ),
     ));
 
+    // Everyone put in 10 000, so nobody is marked as putting in more.
+    expect(find.text('больше вклад'), findsNothing);
+    expect(find.text(AppCurrency.kzt.format.format(10000)), findsWidgets);
     expect(find.text(AppCurrency.kzt.format.format(2500)), findsOneWidget);
-    expect(find.text('Доходов ещё не было, считаем всё'), findsOneWidget);
   });
 }

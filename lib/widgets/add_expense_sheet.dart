@@ -101,6 +101,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   ExpenseCategory _selectedCategory = ExpenseCategory.food;
   DateTime _selectedDate = DateTime.now();
   String? _errorText;
+  bool _shared = false;
 
   bool get _isEditing => widget.existing != null && !widget.isDraft;
 
@@ -120,6 +121,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       _selectedCategory = existing.category ?? ExpenseCategory.food;
       _selectedDate = existing.date;
       _noteController.text = existing.note;
+      _shared = existing.shared;
     }
   }
 
@@ -166,6 +168,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         // itself does not know either of them.
         author: widget.existing?.author ?? '',
         receiptId: widget.existing?.receiptId,
+        shared: widget.type == TransactionType.income && _shared,
       ),
     );
     Navigator.of(context).pop();
@@ -338,6 +341,27 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                   prefixIcon: Icon(Icons.edit_note_rounded, size: _s(24)),
                 ),
               ),
+              if (widget.type == TransactionType.income) ...[
+                SizedBox(height: _s(16)),
+                Text('ЧЬИ ДЕНЬГИ', style: microLabel(context, size: _s(10.5))),
+                SizedBox(height: _s(12)),
+                Wrap(
+                  spacing: _s(10),
+                  runSpacing: _s(10),
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Только за себя'),
+                      selected: !_shared,
+                      onSelected: (_) => setState(() => _shared = false),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Всем поровну'),
+                      selected: _shared,
+                      onSelected: (_) => setState(() => _shared = true),
+                    ),
+                  ],
+                ),
+              ],
               SizedBox(height: _s(16)),
               InkWell(
                 borderRadius: radius,

@@ -350,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
         // Real data arrived -- the wait that timer was guarding against is
         // over, so it should not fire a stale "no connection" state later.
         if (snapshot.hasData) _firstLoadTimer?.cancel();
-        final split = sharedSplit(expenses, people: kRoommateCount);
+        final pool = sharedPool(expenses);
 
         return Scaffold(
           // The list runs under the app bar so there is something for the
@@ -458,7 +458,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             8,
                           ),
                           child: SplitCard(
-                            split: split,
+                            pool: pool,
                             currency: kBudgetCurrency,
                           ),
                         ),

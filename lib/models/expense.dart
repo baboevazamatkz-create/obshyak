@@ -21,6 +21,10 @@ class Expense {
   /// the record came from a scan.
   final String? receiptId;
 
+  /// Income only: true when it is pooled for everyone (split four ways),
+  /// false when it is the author's own money.
+  final bool shared;
+
   const Expense({
     required this.id,
     required this.amount,
@@ -31,6 +35,7 @@ class Expense {
     this.type = TransactionType.expense,
     this.author = '',
     this.receiptId,
+    this.shared = false,
   });
 
   bool get isIncome => type == TransactionType.income;
@@ -45,6 +50,7 @@ class Expense {
         type: type,
         author: author ?? this.author,
         receiptId: receiptId ?? this.receiptId,
+        shared: shared,
       );
 
   Map<String, dynamic> toJson() => {
@@ -57,6 +63,7 @@ class Expense {
         'type': type.storageKey,
         'author': author,
         'receiptId': receiptId,
+        'shared': shared,
       };
 
   factory Expense.fromJson(Map<String, dynamic> json) => Expense(
@@ -71,5 +78,6 @@ class Expense {
         type: TransactionTypeX.fromStorageKey(json['type'] as String?),
         author: json['author'] as String? ?? '',
         receiptId: json['receiptId'] as String?,
+        shared: json['shared'] as bool? ?? false,
       );
 }
