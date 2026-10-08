@@ -122,6 +122,12 @@ class SplitCard extends StatelessWidget {
                   TextButton(
                     onPressed: () => onSettle(settlement),
                     style: TextButton.styleFrom(
+                      foregroundColor: incomeColor(context),
+                      backgroundColor:
+                          incomeColor(context).withValues(alpha: 0.16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       visualDensity: VisualDensity.compact,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       padding: const EdgeInsets.symmetric(horizontal: 8),

@@ -255,7 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openAddSheet(TransactionType type, {Expense? existing}) {
+  void _openAddSheet(TransactionType type) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -264,7 +264,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: AddExpenseSheet(
           type: type,
           currency: kBudgetCurrency,
-          existing: existing,
           onSubmit: _addExpense,
         ),
       ),
@@ -338,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return monthChanged ? _monthDivider(next) : const SizedBox(height: 7);
   }
 
-  /// The swipe-to-delete / long-press-to-edit / tap-for-receipt row.
+  /// The swipe-to-delete / tap-for-receipt row.
   Widget _buildExpenseRow(Expense expense) {
     return Dismissible(
       key: ValueKey(expense.id),
@@ -362,10 +361,8 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: expense.receiptId == null
             ? null
             : () => _showReceipt(expense.receiptId!),
-        // A transfer has no form of its own: delete it and mark it again.
-        onLongPress: expense.isTransfer
-            ? null
-            : () => _openAddSheet(expense.type, existing: expense),
+        // Saved records are not edited: a mistake is deleted and entered
+        // again, so nobody's figures change under them unnoticed.
       ),
     );
   }

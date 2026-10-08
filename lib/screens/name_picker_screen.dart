@@ -25,6 +25,14 @@ class NamePickerScreen extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Center(
+                      child: Image.asset(
+                        'assets/obshak_mark.png',
+                        width: 72,
+                        height: 72,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     Text(
                       'Кто вы?',
                       textAlign: TextAlign.center,

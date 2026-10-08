@@ -48,13 +48,20 @@ class _AppGateState extends State<AppGate> {
       return Scaffold(
         body: AppBackgroundPattern(
           child: Center(
-            child: Text(
-              'ОБЩАК',
-              style: wordmark(
-                context,
-                size: 15,
-                color: goldFor(context).withValues(alpha: 0.92),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset('assets/obshak_mark.png', width: 88, height: 88),
+                const SizedBox(height: 18),
+                Text(
+                  'ОБЩАК',
+                  style: wordmark(
+                    context,
+                    size: 15,
+                    color: goldFor(context).withValues(alpha: 0.92),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
