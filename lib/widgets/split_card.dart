@@ -103,7 +103,7 @@ class SplitCard extends StatelessWidget {
             for (final settlement in pool.settlements)
               // Spaced apart so a thumb lands on one row, not between two.
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   children: [
                     Expanded(
@@ -126,10 +126,20 @@ class SplitCard extends StatelessWidget {
                       onPressed: () => onSettle(settlement),
                       style: TextButton.styleFrom(
                         foregroundColor: incomeColor(context),
+                        backgroundColor: Colors.transparent,
                         visualDensity: VisualDensity.compact,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        minimumSize: const Size(0, 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        minimumSize: const Size(0, 26),
+                      ).copyWith(
+                        // Only a press tints the button. On the web a tapped
+                        // button keeps focus after the dialog closes, and the
+                        // default focus tint read as a green fill.
+                        overlayColor: WidgetStateProperty.resolveWith(
+                          (states) => states.contains(WidgetState.pressed)
+                              ? incomeColor(context).withValues(alpha: 0.12)
+                              : Colors.transparent,
+                        ),
                       ),
                       child: const Text('Оплачено'),
                     ),
