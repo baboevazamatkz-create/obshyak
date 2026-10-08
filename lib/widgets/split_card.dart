@@ -5,24 +5,30 @@ import '../models/shared_budget.dart';
 import '../models/shared_split.dart';
 import '../theme.dart';
 
-/// The flat's pool at the top of the list: what each flatmate put in, what
-/// each spent, and what the whole flat spent split four ways.
+/// The flat's standing at the top of the list: what each flatmate paid for
+/// everyone, where each stands against a fair quarter, and the transfers
+/// that would even it out.
 class SplitCard extends StatelessWidget {
   final SharedPool pool;
   final AppCurrency currency;
 
-  const SplitCard({super.key, required this.pool, required this.currency});
+  /// Records that a suggested transfer has been paid.
+  final ValueChanged<Settlement> onSettle;
+
+  const SplitCard({
+    super.key,
+    required this.pool,
+    required this.currency,
+    required this.onSettle,
+  });
 
   @override
   Widget build(BuildContext context) {
     final ink = accentForeground(context);
-    final muted = ink.withValues(alpha: 0.6);
-    final leaders = pool.biggestContributors;
-    final since = pool.since;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
       decoration: BoxDecoration(
         gradient: heroGradientFor(context),
         borderRadius: BorderRadius.circular(24),
@@ -32,114 +38,123 @@ class SplitCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            since == null
-                ? 'ОБЩАК · С НАЧАЛА'
-                : 'ОБЩАК · С ${_dateLabel(since).toUpperCase()}',
-            style: microLabel(context,
-                color: goldFor(context).withValues(alpha: 0.9)),
+            'ОБЩАК',
+            style: microLabel(
+              context,
+              color: goldFor(context).withValues(alpha: 0.9),
+            ),
           ),
           const SizedBox(height: 12),
           for (final person in pool.people)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
                   Expanded(
                     flex: 4,
-                    child: Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            person.name,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: ink,
-                            ),
-                          ),
-                        ),
-                        if (leaders.contains(person.name)) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: goldFor(context).withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'больше вклад',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: goldFor(context),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: _Figure(
-                      label: 'скинулся',
-                      value: currency.format.format(person.contributed),
-                      color: ink,
+                    child: Text(
+                      person.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: ink,
+                      ),
                     ),
                   ),
                   Expanded(
                     flex: 3,
                     child: _Figure(
                       label: 'потратил',
-                      value: currency.format.format(person.spent),
-                      color: muted,
+                      value: currency.format.format(person.paid),
+                      color: ink.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: _Figure(
+                      label: _balanceLabel(person.balance),
+                      value: _signed(person.balance),
+                      color: _balanceColor(context, person.balance),
                     ),
                   ),
                 ],
               ),
             ),
-          Divider(color: hairlineColor(context), height: 22),
+          Divider(color: hairlineColor(context), height: 20),
           _Line(
-            label: 'Потрачено всего',
-            value: currency.format.format(pool.spentTotal),
+            label: 'Общие траты',
+            value: currency.format.format(pool.sharedTotal),
             ink: ink,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           _Line(
-            label: 'Каждому (всего ÷ $kRoommateCount)',
+            label: 'Доля каждого (÷ $kRoommateCount)',
             value: currency.format.format(pool.perPerson),
             ink: ink,
           ),
-          const SizedBox(height: 6),
-          _Line(
-            label: 'Осталось в общаке',
-            value: currency.format.format(pool.remaining),
-            ink: ink,
-          ),
+          const SizedBox(height: 12),
+          if (pool.isSettled)
+            Text(
+              'Все в расчёте',
+              style: TextStyle(fontSize: 13, color: ink.withValues(alpha: 0.6)),
+            )
+          else ...[
+            Text(
+              'КТО КОМУ ПЕРЕВОДИТ',
+              style: microLabel(
+                context,
+                color: goldFor(context).withValues(alpha: 0.9),
+              ),
+            ),
+            const SizedBox(height: 6),
+            for (final settlement in pool.settlements)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${settlement.from} → ${settlement.to}',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13.5, color: ink),
+                    ),
+                  ),
+                  Text(
+                    currency.format.format(settlement.amount),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: ink,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  TextButton(
+                    onPressed: () => onSettle(settlement),
+                    child: const Text('Оплачено'),
+                  ),
+                ],
+              ),
+          ],
         ],
       ),
     );
   }
 
-  static String _dateLabel(DateTime date) {
-    const months = [
-      'января',
-      'февраля',
-      'марта',
-      'апреля',
-      'мая',
-      'июня',
-      'июля',
-      'августа',
-      'сентября',
-      'октября',
-      'ноября',
-      'декабря',
-    ];
-    return '${date.day} ${months[date.month - 1]}';
+  String _signed(double balance) {
+    if (balance.abs() < kSettledThreshold) return currency.format.format(0);
+    final sign = balance > 0 ? '+' : '−';
+    return '$sign${currency.format.format(balance.abs())}';
+  }
+
+  static String _balanceLabel(double balance) {
+    if (balance >= kSettledThreshold) return 'ему должны';
+    if (balance <= -kSettledThreshold) return 'довнести';
+    return 'в расчёте';
+  }
+
+  static Color _balanceColor(BuildContext context, double balance) {
+    if (balance >= kSettledThreshold) return incomeColor(context);
+    if (balance <= -kSettledThreshold) return expenseColor(context);
+    return accentForeground(context).withValues(alpha: 0.6);
   }
 }
 
@@ -148,8 +163,11 @@ class _Figure extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _Figure(
-      {required this.label, required this.value, required this.color});
+  const _Figure({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -161,7 +179,10 @@ class _Figure extends StatelessWidget {
           child: Text(
             value,
             style: TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w600, color: color),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
           ),
         ),
         Text(
@@ -190,16 +211,16 @@ class _Line extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 13,
-              color: ink.withValues(alpha: 0.7),
-            ),
+            style: TextStyle(fontSize: 13, color: ink.withValues(alpha: 0.7)),
           ),
         ),
         Text(
           value,
-          style:
-              TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: ink,
+          ),
         ),
       ],
     );

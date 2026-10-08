@@ -1,114 +1,151 @@
 import 'expense.dart';
 import 'shared_budget.dart';
 
-/// One flatmate's side of the pool: what they put in and what they spent.
+/// One flatmate's standing in the flat's shared spending.
 class PoolPerson {
   final String name;
-  final double contributed;
-  final double spent;
+
+  /// What they paid for the flat: their receipts minus the personal parts.
+  final double paid;
+
+  /// Money they paid back to others, and money others paid back to them.
+  final double sent;
+  final double received;
+
+  /// Positive: the others owe them this much. Negative: they owe it.
+  final double balance;
 
   const PoolPerson({
     required this.name,
-    required this.contributed,
-    required this.spent,
+    required this.paid,
+    required this.sent,
+    required this.received,
+    required this.balance,
   });
 }
 
-/// The shared pool for the current period.
+/// One transfer that settles the flat: [from] pays [to] [amount].
+class Settlement {
+  final String from;
+  final String to;
+  final double amount;
+
+  const Settlement(
+      {required this.from, required this.to, required this.amount});
+}
+
+/// Where the flat stands: who paid what for everyone, each person's fair
+/// share, and the transfers that would even it out.
 ///
-/// A period opens at the most recent income shared with everyone: that is
-/// the moment the flat pools money again. Income kept for one person, and
-/// every expense, count from there on; anything before it is history.
+/// There is no pooled cash. Paying for the flat's shopping is the
+/// contribution, and a debt is closed by recording a transfer. Nothing is
+/// ever reset: what is unsettled simply carries on.
 class SharedPool {
-  /// One entry per flatmate in [kRoommates] order, even those who have
-  /// put nothing in.
+  /// One entry per flatmate in [kRoommates] order.
   final List<PoolPerson> people;
 
-  /// Date of the shared income that opened this period, or null when no
-  /// shared income exists yet and the whole history counts.
-  final DateTime? since;
+  /// Everything bought for the flat, personal parts left out.
+  final double sharedTotal;
 
-  /// Every expense in the period, including ones whose author is unknown.
-  final double spentTotal;
+  /// The fewest transfers, as a list, that bring every balance to zero.
+  final List<Settlement> settlements;
 
   const SharedPool({
     required this.people,
-    required this.since,
-    required this.spentTotal,
+    required this.sharedTotal,
+    required this.settlements,
   });
 
-  double get contributedTotal =>
-      people.fold(0, (sum, person) => sum + person.contributed);
+  /// Each person's fair share of what was bought for the flat.
+  double get perPerson => sharedTotal / kRoommateCount;
 
-  /// What is left in the pool. Negative when the flat has spent more than
-  /// it put in.
-  double get remaining => contributedTotal - spentTotal;
-
-  /// Each person's fair share of what was spent.
-  double get perPerson => spentTotal / kRoommateCount;
-
-  /// The people to mark as having put in the most. Empty when nobody has
-  /// put anything in, or when everyone who did put in the same amount --
-  /// there is no bigger contribution to point at then.
-  List<String> get biggestContributors {
-    final payers = people.where((p) => p.contributed > 0).toList();
-    if (payers.isEmpty) return const [];
-    final top =
-        payers.map((p) => p.contributed).reduce((a, b) => a > b ? a : b);
-    final leaders = payers.where((p) => p.contributed == top).toList();
-    if (leaders.length == payers.length && payers.length > 1) return const [];
-    return leaders.map((p) => p.name).toList();
-  }
+  bool get isSettled => settlements.isEmpty;
 }
+
+/// Balances closer to zero than this are treated as settled: a split into
+/// four leaves fractions of a tenge nobody is going to transfer.
+const double kSettledThreshold = 1;
 
 /// Pure, so the rule can be tested without a Firestore stream behind it.
 SharedPool sharedPool(List<Expense> expenses) {
-  Expense? anchor;
-  for (final expense in expenses) {
-    if (!expense.isIncome || !expense.shared) continue;
-    if (anchor == null || expense.date.isAfter(anchor.date)) anchor = expense;
-  }
-
-  final opening = anchor;
-  bool inPeriod(Expense expense) =>
-      opening == null ||
-      expense.id == opening.id ||
-      expense.date.isAfter(opening.date);
-
-  final contributed = {for (final name in kRoommates) name: 0.0};
-  final spent = {for (final name in kRoommates) name: 0.0};
-  var spentTotal = 0.0;
+  final paid = {for (final name in kRoommates) name: 0.0};
+  final sent = {for (final name in kRoommates) name: 0.0};
+  final received = {for (final name in kRoommates) name: 0.0};
+  var sharedTotal = 0.0;
 
   for (final expense in expenses) {
-    if (!inPeriod(expense)) continue;
-    if (expense.isIncome) {
-      if (expense.shared) {
-        for (final name in kRoommates) {
-          contributed[name] =
-              contributed[name]! + expense.amount / kRoommateCount;
-        }
-      } else if (contributed.containsKey(expense.author)) {
-        contributed[expense.author] =
-            contributed[expense.author]! + expense.amount;
+    if (expense.isTransfer) {
+      final to = expense.recipient;
+      if (sent.containsKey(expense.author) && received.containsKey(to)) {
+        sent[expense.author] = sent[expense.author]! + expense.amount;
+        received[to!] = received[to]! + expense.amount;
       }
-    } else {
-      spentTotal += expense.amount;
-      if (spent.containsKey(expense.author)) {
-        spent[expense.author] = spent[expense.author]! + expense.amount;
-      }
+    } else if (!expense.isIncome) {
+      // A purchase only counts once we know who paid for it; an anonymous
+      // one could not be balanced against anybody.
+      if (!paid.containsKey(expense.author)) continue;
+      paid[expense.author] = paid[expense.author]! + expense.sharedAmount;
+      sharedTotal += expense.sharedAmount;
     }
   }
 
+  final fair = sharedTotal / kRoommateCount;
+  final people = [
+    for (final name in kRoommates)
+      PoolPerson(
+        name: name,
+        paid: paid[name]!,
+        sent: sent[name]!,
+        received: received[name]!,
+        balance: paid[name]! - fair + sent[name]! - received[name]!,
+      ),
+  ];
+
   return SharedPool(
-    people: [
-      for (final name in kRoommates)
-        PoolPerson(
-          name: name,
-          contributed: contributed[name]!,
-          spent: spent[name]!,
-        ),
-    ],
-    since: anchor?.date,
-    spentTotal: spentTotal,
+    people: people,
+    sharedTotal: sharedTotal,
+    settlements: _settle(people),
   );
+}
+
+/// Pairs the biggest debtor with the biggest creditor until everyone is
+/// within [kSettledThreshold] of zero. Greedy, which for four people is
+/// never more than three transfers.
+List<Settlement> _settle(List<PoolPerson> people) {
+  final creditors = [
+    for (final p in people)
+      if (p.balance >= kSettledThreshold) _Open(p.name, p.balance),
+  ]..sort((a, b) => b.amount.compareTo(a.amount));
+  final debtors = [
+    for (final p in people)
+      if (p.balance <= -kSettledThreshold) _Open(p.name, -p.balance),
+  ]..sort((a, b) => b.amount.compareTo(a.amount));
+
+  final result = <Settlement>[];
+  var c = 0;
+  var d = 0;
+  while (c < creditors.length && d < debtors.length) {
+    final amount = creditors[c].amount < debtors[d].amount
+        ? creditors[c].amount
+        : debtors[d].amount;
+    final rounded = amount.roundToDouble();
+    if (rounded >= kSettledThreshold) {
+      result.add(Settlement(
+        from: debtors[d].name,
+        to: creditors[c].name,
+        amount: rounded,
+      ));
+    }
+    creditors[c].amount -= amount;
+    debtors[d].amount -= amount;
+    if (creditors[c].amount < kSettledThreshold) c++;
+    if (debtors[d].amount < kSettledThreshold) d++;
+  }
+  return result;
+}
+
+class _Open {
+  final String name;
+  double amount;
+  _Open(this.name, this.amount);
 }

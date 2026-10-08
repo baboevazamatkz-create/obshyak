@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/expense_repository.dart';
 import '../data/scan_service.dart';
+import '../models/currency.dart';
 import '../models/expense.dart';
 import '../models/shared_budget.dart';
 import '../models/shared_split.dart';
@@ -108,11 +109,51 @@ class _HomeScreenState extends State<HomeScreen> {
         _startFirstLoadTimer();
       });
 
+  /// Stamps whoever is using this phone as the author, unless the record
+  /// already names one: a transfer is written for whoever paid, and an
+  /// edited record keeps its original author.
   Future<void> _addExpense(Expense expense) {
     return _repository.addExpense(
       kSharedBudgetCode,
-      expense.copyWith(author: widget.myName),
+      expense.author.isEmpty
+          ? expense.copyWith(author: widget.myName)
+          : expense,
     );
+  }
+
+  /// Records that [settlement] has been paid, after asking: anyone can mark
+  /// it, so the dialog spells out who paid whom.
+  Future<void> _confirmSettlement(Settlement settlement) async {
+    final amount = kBudgetCurrency.format.format(settlement.amount);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Перевод сделан?'),
+        content: Text(
+          '${settlement.from} перевёл ${settlement.to} $amount.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Да, оплачено'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _addExpense(Expense(
+      id: const Uuid().v4(),
+      amount: settlement.amount,
+      date: DateTime.now(),
+      currency: kBudgetCurrency,
+      type: TransactionType.transfer,
+      author: settlement.from,
+      recipient: settlement.to,
+    ));
   }
 
   Future<void> _openScanner(List<Expense> expenses) async {
@@ -120,7 +161,18 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       currency: kBudgetCurrency,
       existing: expenses,
-      onAdd: (added, photo) async {
+      onAdd: (scanned, photo) async {
+        // The flat records purchases only; an incoming payment read off a
+        // bank screenshot has nowhere to go.
+        final added = scanned.where((e) => !e.isIncome).toList();
+        if (added.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('На снимке нет покупок')),
+            );
+          }
+          return;
+        }
         // The photo is written first so that no record ever points at a
         // receipt that is not there.
         String? receiptId;
@@ -156,7 +208,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).removeCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(expense.isIncome ? 'Доход удалён' : 'Расход удалён'),
+        content: Text(expense.isTransfer ? 'Перевод удалён' : 'Запись удалена'),
         duration: const Duration(seconds: 2),
         persist: false,
         action: SnackBarAction(
@@ -301,7 +353,10 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: expense.receiptId == null
             ? null
             : () => _showReceipt(expense.receiptId!),
-        onLongPress: () => _openAddSheet(expense.type, existing: expense),
+        // A transfer has no form of its own: delete it and mark it again.
+        onLongPress: expense.isTransfer
+            ? null
+            : () => _openAddSheet(expense.type, existing: expense),
       ),
     );
   }
@@ -415,17 +470,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     : kAccentColor)
                                 .withValues(alpha: kFabFillOpacity),
                         onPressed: () => _openAddSheet(TransactionType.expense),
-                        tooltip: 'Добавить расход',
-                        child: const Icon(Icons.remove_rounded),
-                      ),
-                      const SizedBox(height: 14),
-                      FloatingActionButton(
-                        heroTag: 'add_income',
-                        backgroundColor: incomeColor(context)
-                            .withValues(alpha: kFabFillOpacity),
-                        foregroundColor: const Color(0xFFF6F2EA),
-                        onPressed: () => _openAddSheet(TransactionType.income),
-                        tooltip: 'Добавить доход',
+                        tooltip: 'Добавить покупку',
                         child: const Icon(Icons.add_rounded),
                       ),
                     ],
@@ -460,6 +505,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: SplitCard(
                             pool: pool,
                             currency: kBudgetCurrency,
+                            onSettle: _confirmSettlement,
                           ),
                         ),
                         Expanded(

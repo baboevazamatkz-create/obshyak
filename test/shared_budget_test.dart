@@ -25,114 +25,126 @@ Expense _spend(String id, double amount, DateTime date) => Expense(
 
 void main() {
   group('sharedPool', () {
-    Expense sharedIncome(String id, double amount, DateTime date) => Expense(
-          id: id,
+    Expense buy(String who, double amount, {double personal = 0}) => Expense(
+          id: '$who-$amount-$personal',
           amount: amount,
-          date: date,
+          date: DateTime(2026, 10, 1),
+          author: who,
+          personal: personal,
           currency: AppCurrency.kzt,
-          type: TransactionType.income,
-          shared: true,
         );
 
-    Expense soloIncome(String id, String who, double amount, DateTime date) =>
-        Expense(
-          id: id,
+    Expense paidBack(String from, String to, double amount) => Expense(
+          id: '$from-$to-$amount',
           amount: amount,
-          date: date,
-          author: who,
+          date: DateTime(2026, 10, 2),
+          author: from,
+          recipient: to,
           currency: AppCurrency.kzt,
-          type: TransactionType.income,
-        );
-
-    Expense spendBy(String id, String who, double amount, DateTime date) =>
-        Expense(
-          id: id,
-          amount: amount,
-          date: date,
-          author: who,
-          currency: AppCurrency.kzt,
+          type: TransactionType.transfer,
         );
 
     PoolPerson person(SharedPool pool, String name) =>
         pool.people.singleWhere((p) => p.name == name);
 
-    test('a shared income is split four ways and counts as each share', () {
-      final pool = sharedPool([
-        sharedIncome('pool', 60000, DateTime(2026, 10, 1)),
-        spendBy('food', 'Азамат', 8000, DateTime(2026, 10, 2)),
-      ]);
-      expect(person(pool, 'Азамат').contributed, 15000);
-      expect(person(pool, 'Аслан').contributed, 15000);
-      expect(pool.contributedTotal, 60000);
-      expect(pool.spentTotal, 8000);
-      expect(pool.remaining, 52000);
+    test('one purchase: the buyer is owed three quarters, the rest owe one',
+        () {
+      final pool = sharedPool([buy('Азамат', 8000)]);
+      expect(pool.sharedTotal, 8000);
       expect(pool.perPerson, 2000);
-      expect(person(pool, 'Азамат').spent, 8000);
-      expect(person(pool, 'Аслан').spent, 0);
+      expect(person(pool, 'Азамат').paid, 8000);
+      expect(person(pool, 'Азамат').balance, 6000);
+      expect(person(pool, 'Аслан').balance, -2000);
+      expect(pool.settlements.length, 3);
+      expect(pool.settlements.every((s) => s.to == 'Азамат'), isTrue);
+      expect(pool.settlements.every((s) => s.amount == 2000), isTrue);
     });
 
-    test('a solo income belongs to whoever entered it', () {
+    test('the personal part of a receipt is not split', () {
+      final pool = sharedPool([buy('Имран', 10000, personal: 2000)]);
+      expect(pool.sharedTotal, 8000);
+      expect(person(pool, 'Имран').paid, 8000);
+      expect(person(pool, 'Имран').balance, 6000);
+    });
+
+    test('a recorded transfer closes that debt', () {
       final pool = sharedPool([
-        soloIncome('mine', 'Имран', 5000, DateTime(2026, 10, 1)),
+        buy('Азамат', 8000),
+        paidBack('Аслан', 'Азамат', 2000),
       ]);
-      expect(person(pool, 'Имран').contributed, 5000);
-      expect(person(pool, 'Аслан').contributed, 0);
-      expect(pool.biggestContributors, ['Имран']);
+      expect(person(pool, 'Аслан').balance, 0);
+      expect(person(pool, 'Азамат').balance, 4000);
+      expect(pool.settlements.any((s) => s.from == 'Аслан'), isFalse);
     });
 
-    test('the latest shared income opens the period; older spending drops out',
-        () {
+    test('everyone paying their quarter leaves nothing to settle', () {
       final pool = sharedPool([
-        spendBy('late', 'Аслан', 1000, DateTime(2026, 10, 3)),
-        sharedIncome('pool', 40000, DateTime(2026, 10, 2)),
-        spendBy('early', 'Азамат', 9000, DateTime(2026, 10, 1)),
+        for (final name in kRoommates) buy(name, 3000),
       ]);
-      expect(pool.since, DateTime(2026, 10, 2));
-      expect(pool.spentTotal, 1000);
-      expect(person(pool, 'Азамат').spent, 0);
-      expect(person(pool, 'Аслан').spent, 1000);
+      expect(pool.isSettled, isTrue);
+      for (final p in pool.people) {
+        expect(p.balance, 0);
+      }
     });
 
-    test('a solo income from before the period opening is not counted', () {
+    test('balances always add up to zero', () {
       final pool = sharedPool([
-        sharedIncome('pool', 40000, DateTime(2026, 10, 5)),
-        soloIncome('old', 'Имран', 9000, DateTime(2026, 10, 1)),
+        buy('Азамат', 4300),
+        buy('Аслан', 1250, personal: 250),
+        buy('Мухаммад', 999),
+        paidBack('Имран', 'Азамат', 700),
       ]);
-      // Only Имран's share of the shared income counts, not the old 9 000.
-      expect(person(pool, 'Имран').contributed, 10000);
-      expect(pool.biggestContributors, isEmpty);
+      final sum = pool.people.fold<double>(0, (s, p) => s + p.balance);
+      expect(sum.abs(), lessThan(0.001));
     });
 
-    test('with no shared income yet, the whole history counts', () {
+    test('settling the suggested transfers brings everyone to zero', () {
+      final records = [
+        buy('Азамат', 4300),
+        buy('Аслан', 1000),
+        buy('Мухаммад', 999),
+      ];
+      final first = sharedPool(records);
+      final settled = sharedPool([
+        ...records,
+        for (final s in first.settlements) paidBack(s.from, s.to, s.amount),
+      ]);
+      expect(settled.isSettled, isTrue);
+    });
+
+    test('a purchase with no known author is left out of the split', () {
       final pool = sharedPool([
-        spendBy('a', 'Азамат', 400, DateTime(2026, 9, 1)),
-        soloIncome('b', 'Аслан', 1000, DateTime(2026, 9, 2)),
+        Expense(
+          id: 'old',
+          amount: 5000,
+          date: DateTime(2026, 1, 1),
+          currency: AppCurrency.kzt,
+        ),
       ]);
-      expect(pool.since, isNull);
-      expect(pool.spentTotal, 400);
-      expect(pool.remaining, 600);
+      expect(pool.sharedTotal, 0);
+      expect(pool.isSettled, isTrue);
     });
 
-    test('when one person put in more on their own, they are marked as bigger',
-        () {
+    test('legacy income records change nothing', () {
       final pool = sharedPool([
-        sharedIncome('b', 4000, DateTime(2026, 10, 2)),
-        soloIncome('a', 'Мухаммад', 3000, DateTime(2026, 10, 3)),
+        Expense(
+          id: 'income',
+          amount: 60000,
+          date: DateTime(2026, 1, 1),
+          author: 'Азамат',
+          currency: AppCurrency.kzt,
+          type: TransactionType.income,
+        ),
       ]);
-      expect(pool.biggestContributors, ['Мухаммад']);
+      expect(pool.sharedTotal, 0);
+      expect(pool.isSettled, isTrue);
     });
 
-    test('equal contributions mark nobody as bigger', () {
-      final pool = sharedPool([
-        sharedIncome('pool', 80000, DateTime(2026, 10, 1)),
-      ]);
-      expect(pool.biggestContributors, isEmpty);
-    });
-
-    test('an empty budget totals to zero rather than failing', () {
+    test('an empty budget is settled and splits to zero', () {
       final pool = sharedPool(const []);
-      expect(pool.spentTotal, 0);
+      expect(pool.sharedTotal, 0);
       expect(pool.perPerson, 0);
+      expect(pool.isSettled, isTrue);
       expect(pool.people.length, kRoommateCount);
     });
   });
@@ -145,11 +157,15 @@ void main() {
         date: DateTime(2026, 10, 1),
         author: 'Аслан',
         receiptId: 'r1',
+        personal: 300,
+        recipient: 'Имран',
         currency: AppCurrency.kzt,
       );
       final restored = Expense.fromJson(expense.toJson());
       expect(restored.author, 'Аслан');
       expect(restored.receiptId, 'r1');
+      expect(restored.personal, 300);
+      expect(restored.recipient, 'Имран');
     });
 
     test('records written before names existed read as anonymous, no receipt',
@@ -165,6 +181,7 @@ void main() {
       });
       expect(restored.author, '');
       expect(restored.receiptId, isNull);
+      expect(restored.personal, 0);
     });
 
     test('copyWith stamps the author without touching the rest', () {
@@ -230,35 +247,51 @@ void main() {
     expect(picked, 'Аслан');
   });
 
-  testWidgets('the pool card shows each person\'s share in tenge',
+  testWidgets('the pool card lists who pays whom and reports a settle tap',
       (tester) async {
     final pool = sharedPool([
       Expense(
-        id: 'pool',
-        amount: 40000,
-        date: DateTime(2026, 10, 1),
-        author: 'Азамат',
-        currency: AppCurrency.kzt,
-        type: TransactionType.income,
-        shared: true,
-      ),
-      Expense(
         id: 'food',
-        amount: 10000,
+        amount: 8000,
         date: DateTime(2026, 10, 2),
-        author: 'Аслан',
+        author: 'Азамат',
         currency: AppCurrency.kzt,
       ),
     ]);
+    Settlement? tapped;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: SplitCard(pool: pool, currency: AppCurrency.kzt),
+        body: SingleChildScrollView(
+          child: SplitCard(
+            pool: pool,
+            currency: AppCurrency.kzt,
+            onSettle: (s) => tapped = s,
+          ),
+        ),
       ),
     ));
 
-    // Everyone put in 10 000, so nobody is marked as putting in more.
-    expect(find.text('больше вклад'), findsNothing);
-    expect(find.text(AppCurrency.kzt.format.format(10000)), findsWidgets);
-    expect(find.text(AppCurrency.kzt.format.format(2500)), findsOneWidget);
+    expect(find.text('Аслан → Азамат'), findsOneWidget);
+    expect(find.text('Оплачено'), findsNWidgets(3));
+    await tester.tap(find.text('Оплачено').first);
+    expect(tapped, isNotNull);
+    expect(tapped!.to, 'Азамат');
+  });
+
+  testWidgets('a settled flat says so instead of listing transfers',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: SplitCard(
+            pool: sharedPool(const []),
+            currency: AppCurrency.kzt,
+            onSettle: (_) {},
+          ),
+        ),
+      ),
+    ));
+    expect(find.text('Все в расчёте'), findsOneWidget);
+    expect(find.text('Оплачено'), findsNothing);
   });
 }

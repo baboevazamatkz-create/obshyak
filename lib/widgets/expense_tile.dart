@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 
 import '../models/currency.dart';
 import '../models/expense.dart';
-import '../models/expense_category.dart';
 import '../theme.dart';
 import 'glass.dart';
 
@@ -46,11 +45,31 @@ class ExpenseTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isIncome = expense.isIncome;
-    final accent = isIncome ? incomeColor(context) : expense.category!.color;
-    final icon =
-        isIncome ? Icons.arrow_downward_rounded : expense.category!.icon;
-    final title = isIncome ? 'Доход' : expense.category!.label;
-    final sign = isIncome ? '+' : '−';
+    final isTransfer = expense.isTransfer;
+    final accent = isTransfer
+        ? goldFor(context)
+        : isIncome
+            ? incomeColor(context)
+            : expenseColor(context);
+    final icon = isTransfer
+        ? Icons.swap_horiz_rounded
+        : isIncome
+            ? Icons.arrow_downward_rounded
+            : Icons.shopping_basket_outlined;
+    final title = isTransfer
+        ? '${expense.author} → ${expense.recipient ?? ''}'
+        : isIncome
+            ? 'Доход'
+            : (expense.note.isNotEmpty ? expense.note : 'Покупка');
+    final details = [
+      if (isTransfer) 'вернул долг',
+      if (!isTransfer && expense.author.isNotEmpty) expense.author,
+      if (isIncome && expense.note.isNotEmpty) expense.note,
+      if (expense.personal > 0)
+        'личное ${currency.format.format(expense.personal)}',
+      if (expense.receiptId != null) 'чек',
+    ].join(' · ');
+    final sign = isTransfer ? '' : (isIncome ? '+' : '−');
     final displayAmount = amountOverride ?? expense.amount;
     final approxPrefix = isApproximate ? '≈ ' : '';
     final ink = accentForeground(context);
@@ -106,10 +125,10 @@ class ExpenseTile extends StatelessWidget {
                               color: ink.withValues(alpha: 0.92),
                             ),
                           ),
-                          if (expense.note.isNotEmpty) ...[
+                          if (details.isNotEmpty) ...[
                             const SizedBox(height: 1),
                             Text(
-                              expense.note,
+                              details,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -139,9 +158,7 @@ class ExpenseTile extends StatelessWidget {
                               style: moneyStyle(
                                 size: 13,
                                 weight: FontWeight.w500,
-                                color: isIncome
-                                    ? incomeColor(context)
-                                    : expenseColor(context),
+                                color: accent,
                               ),
                             ),
                           ),

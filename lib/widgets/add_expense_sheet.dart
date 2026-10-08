@@ -5,7 +5,6 @@ import 'package:uuid/uuid.dart';
 
 import '../models/currency.dart';
 import '../models/expense.dart';
-import '../models/expense_category.dart';
 import '../models/transaction_type.dart';
 import '../theme.dart';
 import 'currency_symbol_icon.dart';
@@ -60,11 +59,6 @@ class AddExpenseSheet extends StatefulWidget {
   final Expense? existing;
   final void Function(Expense expense) onSubmit;
 
-  /// Which category to open on, when something outside the sheet already
-  /// knows -- the home-screen widget, whose chip the user set before
-  /// tapping. Ignored while editing, where the record's own category wins.
-  final ExpenseCategory? initialCategory;
-
   /// [existing] doubles as a draft's starting values -- the voice
   /// assistant's best guess at what was said, say -- without this the
   /// sheet has no way to tell "editing a real record" from "reviewing a
@@ -77,7 +71,6 @@ class AddExpenseSheet extends StatefulWidget {
     required this.type,
     required this.currency,
     this.existing,
-    this.initialCategory,
     this.isDraft = false,
     required this.onSubmit,
   });
@@ -98,17 +91,19 @@ double _s(double value) => value * _kScale;
 class _AddExpenseSheetState extends State<AddExpenseSheet> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
-  ExpenseCategory _selectedCategory = ExpenseCategory.food;
+
+  /// The part of the receipt that was for the author alone. It stays out of
+  /// what is split four ways.
+  final _personalController = TextEditingController();
+  String? _personalErrorText;
   DateTime _selectedDate = DateTime.now();
   String? _errorText;
-  bool _shared = false;
 
   bool get _isEditing => widget.existing != null && !widget.isDraft;
 
   @override
   void initState() {
     super.initState();
-    _selectedCategory = widget.initialCategory ?? ExpenseCategory.food;
     final existing = widget.existing;
     if (existing != null) {
       final rawAmount = existing.amount == existing.amount.roundToDouble()
@@ -118,10 +113,15 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       _amountController.text = dotIndex == -1
           ? _groupThousands(rawAmount)
           : '${_groupThousands(rawAmount.substring(0, dotIndex))}${rawAmount.substring(dotIndex)}';
-      _selectedCategory = existing.category ?? ExpenseCategory.food;
       _selectedDate = existing.date;
       _noteController.text = existing.note;
-      _shared = existing.shared;
+      if (existing.personal > 0) {
+        _personalController.text = _groupThousands(
+          existing.personal == existing.personal.roundToDouble()
+              ? existing.personal.toInt().toString()
+              : existing.personal.toString(),
+        );
+      }
     }
   }
 
@@ -129,6 +129,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
+    _personalController.dispose();
     super.dispose();
   }
 
@@ -145,21 +146,32 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     }
   }
 
+  static double? _parseAmount(String text) =>
+      double.tryParse(text.replaceAll(' ', '').replaceAll(',', '.').trim());
+
   void _submit() {
-    final amountText =
-        _amountController.text.replaceAll(' ', '').replaceAll(',', '.').trim();
-    final amount = double.tryParse(amountText);
+    final amount = _parseAmount(_amountController.text);
     if (amount == null || amount <= 0) {
       setState(() => _errorText = 'Введите корректную сумму');
       return;
+    }
+    var personal = 0.0;
+    if (_personalController.text.trim().isNotEmpty) {
+      final parsed = _parseAmount(_personalController.text);
+      if (parsed == null || parsed < 0 || parsed > amount) {
+        setState(() => _personalErrorText = 'Не больше суммы чека');
+        return;
+      }
+      personal = parsed;
     }
 
     widget.onSubmit(
       Expense(
         id: _isEditing ? widget.existing!.id : const Uuid().v4(),
         amount: amount,
-        category:
-            widget.type == TransactionType.expense ? _selectedCategory : null,
+        // No category is picked any more; a scanned record keeps the one
+        // the scanner gave it.
+        category: widget.existing?.category,
         note: _noteController.text.trim(),
         date: _selectedDate,
         currency: widget.currency,
@@ -168,7 +180,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         // itself does not know either of them.
         author: widget.existing?.author ?? '',
         receiptId: widget.existing?.receiptId,
-        shared: widget.type == TransactionType.income && _shared,
+        personal: widget.type == TransactionType.expense ? personal : 0,
       ),
     );
     Navigator.of(context).pop();
@@ -295,73 +307,32 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               ),
               if (widget.type == TransactionType.expense) ...[
                 SizedBox(height: _s(16)),
-                Text('КАТЕГОРИЯ', style: microLabel(context, size: _s(10.5))),
-                SizedBox(height: _s(12)),
-                Wrap(
-                  spacing: _s(10),
-                  runSpacing: _s(10),
-                  children: ExpenseCategory.values.map((category) {
-                    final selected = category == _selectedCategory;
-                    const onSelectedInk = Color(0xFFF6F2EA);
-                    return ChoiceChip(
-                      selected: selected,
-                      showCheckmark: false,
-                      onSelected: (_) =>
-                          setState(() => _selectedCategory = category),
-                      avatar: Icon(
-                        category.icon,
-                        size: _s(17),
-                        color: selected ? onSelectedInk : category.color,
-                      ),
-                      label: Text(category.label),
-                      labelStyle: TextStyle(
-                        fontSize: _s(13),
-                        color: selected ? onSelectedInk : category.color,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      selectedColor: category.color,
-                      backgroundColor: category.color.withValues(alpha: 0.08),
-                      side: BorderSide(
-                        color: category.color.withValues(
-                          alpha: selected ? 0 : 0.28,
-                        ),
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(_s(30)),
-                      ),
-                    );
-                  }).toList(),
+                TextField(
+                  controller: _personalController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [_ThousandsSeparatorFormatter()],
+                  decoration: InputDecoration(
+                    hintText: 'Из них лично, не в общак',
+                    errorText: _personalErrorText,
+                    prefixIcon:
+                        Icon(Icons.person_outline_rounded, size: _s(20)),
+                  ),
+                  onChanged: (_) {
+                    if (_personalErrorText != null) {
+                      setState(() => _personalErrorText = null);
+                    }
+                  },
                 ),
               ],
               SizedBox(height: _s(16)),
               TextField(
                 controller: _noteController,
                 decoration: InputDecoration(
-                  hintText: 'Заметка',
+                  hintText: 'Что купили',
                   prefixIcon: Icon(Icons.edit_note_rounded, size: _s(24)),
                 ),
               ),
-              if (widget.type == TransactionType.income) ...[
-                SizedBox(height: _s(16)),
-                Text('ЧЬИ ДЕНЬГИ', style: microLabel(context, size: _s(10.5))),
-                SizedBox(height: _s(12)),
-                Wrap(
-                  spacing: _s(10),
-                  runSpacing: _s(10),
-                  children: [
-                    ChoiceChip(
-                      label: const Text('Только за себя'),
-                      selected: !_shared,
-                      onSelected: (_) => setState(() => _shared = false),
-                    ),
-                    ChoiceChip(
-                      label: const Text('Всем поровну'),
-                      selected: _shared,
-                      onSelected: (_) => setState(() => _shared = true),
-                    ),
-                  ],
-                ),
-              ],
               SizedBox(height: _s(16)),
               InkWell(
                 borderRadius: radius,

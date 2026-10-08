@@ -21,9 +21,13 @@ class Expense {
   /// the record came from a scan.
   final String? receiptId;
 
-  /// Income only: true when it is pooled for everyone (split four ways),
-  /// false when it is the author's own money.
-  final bool shared;
+  /// Expense only: the part of the receipt that was for the author alone.
+  /// It is kept out of what the flat splits.
+  final double personal;
+
+  /// Transfer only: the flatmate who was paid back. The author is the one
+  /// who paid.
+  final String? recipient;
 
   const Expense({
     required this.id,
@@ -35,10 +39,18 @@ class Expense {
     this.type = TransactionType.expense,
     this.author = '',
     this.receiptId,
-    this.shared = false,
+    this.personal = 0,
+    this.recipient,
   });
 
   bool get isIncome => type == TransactionType.income;
+  bool get isTransfer => type == TransactionType.transfer;
+
+  /// What goes into the flat's split: the receipt minus the personal part.
+  double get sharedAmount {
+    final shared = amount - personal;
+    return shared < 0 ? 0 : shared;
+  }
 
   Expense copyWith({String? author, String? receiptId}) => Expense(
         id: id,
@@ -50,7 +62,8 @@ class Expense {
         type: type,
         author: author ?? this.author,
         receiptId: receiptId ?? this.receiptId,
-        shared: shared,
+        personal: personal,
+        recipient: recipient,
       );
 
   Map<String, dynamic> toJson() => {
@@ -63,7 +76,8 @@ class Expense {
         'type': type.storageKey,
         'author': author,
         'receiptId': receiptId,
-        'shared': shared,
+        'personal': personal,
+        'recipient': recipient,
       };
 
   factory Expense.fromJson(Map<String, dynamic> json) => Expense(
@@ -78,6 +92,7 @@ class Expense {
         type: TransactionTypeX.fromStorageKey(json['type'] as String?),
         author: json['author'] as String? ?? '',
         receiptId: json['receiptId'] as String?,
-        shared: json['shared'] as bool? ?? false,
+        personal: (json['personal'] as num?)?.toDouble() ?? 0,
+        recipient: json['recipient'] as String?,
       );
 }
