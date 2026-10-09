@@ -26,6 +26,7 @@ import '../widgets/glass.dart';
 import '../widgets/readable_width.dart';
 import '../widgets/receipt_dialog.dart';
 import '../widgets/split_card.dart';
+import '../widgets/tour.dart';
 import 'history_screen.dart';
 import 'scan_flow.dart';
 
@@ -95,6 +96,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _expensesStream = _repository.watchExpenses(kSharedBudgetCode);
     _startFirstLoadTimer();
+    // After the first frame, so the tour has the real screen to sit over.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) OnboardingTour.showIfNew(context);
+    });
   }
 
   @override
