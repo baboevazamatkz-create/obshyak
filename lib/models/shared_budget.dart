@@ -12,9 +12,9 @@ const kAdminName = 'Азамат';
 /// it ships in the web build.
 const kRoommateCodes = {
   'Азамат': '2807',
-  'Аслан': '1101',
+  'Аслан': '0505',
   'Мухаммад': '1102',
-  'Имран': '1103',
+  'Имран': '3344',
 };
 
 /// How many people the shared total is split between.

@@ -575,13 +575,13 @@ void main() {
 
     test('a stored name that is no longer one of the four is forgotten',
         () async {
-      SharedPreferences.setMockInitialValues({'my_name_v2': 'Незнакомец'});
+      SharedPreferences.setMockInitialValues({'my_name_v3': 'Незнакомец'});
       expect(await NameStore.load(), isNull);
     });
 
     test('a name picked before the codes came in has to sign in again',
         () async {
-      SharedPreferences.setMockInitialValues({'my_name': 'Аслан'});
+      SharedPreferences.setMockInitialValues({'my_name_v2': 'Аслан'});
       expect(await NameStore.load(), isNull);
     });
   });
@@ -625,7 +625,7 @@ void main() {
     expect(find.text('Неверный код'), findsOneWidget);
     expect(picked, isNull, reason: "Азамат's code does not open Аслан");
 
-    await tester.enterText(find.byType(TextField), '1101');
+    await tester.enterText(find.byType(TextField), '0505');
     await tester.pumpAndSettle();
     expect(picked, 'Аслан');
     expect(find.byType(TextField), findsNothing);

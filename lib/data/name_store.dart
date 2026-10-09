@@ -7,8 +7,9 @@ class NameStore {
   NameStore._();
 
   /// Bumped when every phone has to sign in again: v2 came with the
-  /// per-person codes, so names picked before them are forgotten.
-  static const _key = 'my_name_v2';
+  /// per-person codes and v3 with new codes for Аслан and Имран, so names
+  /// picked before are forgotten.
+  static const _key = 'my_name_v3';
 
   /// Null until a name has been picked, or if the stored value is no longer
   /// one of [kRoommates].
