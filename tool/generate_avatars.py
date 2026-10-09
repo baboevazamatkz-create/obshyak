@@ -40,14 +40,17 @@ PEOPLE = [
     # The long beard needs the face smaller and higher to end inside the
     # disc rather than run off its edge.
     ('azamat', (196, 160, 92, 255), BLACK_HAIR, 1.0, 'long', False, 0.86, 0.44),
-    ('aslan', (74, 150, 140, 255), BLACK_HAIR, 0.78, 'stubble', False, 1.0, 0.53),
+    ('aslan', (74, 150, 140, 255), BLACK_HAIR, 0.78, 'short', False, 1.0, 0.53),
     ('muhammad', (132, 102, 176, 255), BROWN_HAIR, 1.0, 'medium', True, 1.0, 0.52),
     ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, None, True, 1.0, 0.53),
 ]
 
 # How much of the hair colour shows through each beard. Stubble is the same
 # shape as a beard, only short and thin, so it is drawn see-through.
-BEARD_OPACITY = {'long': 1.0, 'medium': 1.0, 'stubble': 0.42}
+BEARD_OPACITY = {'long': 1.0, 'medium': 1.0, 'short': 1.0, 'stubble': 0.42}
+
+# Beards short enough to follow the jaw rather than hang below the chin.
+JAW_BEARDS = {'short', 'stubble'}
 
 
 def ellipse(draw, cx, cy, rx, ry, **kw):
@@ -80,6 +83,7 @@ def face(background, hair, width, beard, glasses, size, centre):
         top, depth = {
             'long': (0.16, ry + S * 0.16),
             'medium': (0.18, ry + S * 0.035),
+            'short': (0.24, ry * 0.76),
             'stubble': (0.26, ry * 0.76),
         }[beard]
         by = cy + ry * top
@@ -106,12 +110,15 @@ def face(background, hair, width, beard, glasses, size, centre):
         # Keep the face's own outline: nothing of the beard outside the
         # jaw except what hangs below the chin.
         opacity = BEARD_OPACITY[beard]
-        if opacity < 1:
-            # Stubble grows on the face, never past it: clip to the jaw.
+        alpha = layer.getchannel('A').point(lambda a: int(a * opacity))
+        if beard in JAW_BEARDS:
+            # A short beard grows on the face, never past it: clip to the
+            # jaw, with a little room below the chin.
             jaw = Image.new('L', (S, S), 0)
-            ellipse(ImageDraw.Draw(jaw), cx, cy, rx, ry, fill=255)
-            alpha = layer.getchannel('A').point(lambda a: int(a * opacity))
-            layer.putalpha(ImageChops.multiply(alpha, jaw))
+            ellipse(ImageDraw.Draw(jaw), cx, cy + ry * 0.03, rx, ry * 1.03,
+                    fill=255)
+            alpha = ImageChops.multiply(alpha, jaw)
+        layer.putalpha(alpha)
         image.alpha_composite(layer)
     else:
         cheeks = Image.new('RGBA', (S, S), (0, 0, 0, 0))
