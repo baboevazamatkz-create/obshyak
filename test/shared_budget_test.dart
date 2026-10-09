@@ -17,6 +17,8 @@ import 'package:expense_tracker/models/transaction_type.dart';
 import 'package:expense_tracker/data/scan_service.dart';
 import 'package:expense_tracker/screens/name_picker_screen.dart';
 import 'package:expense_tracker/widgets/fine_banner.dart';
+import 'package:expense_tracker/widgets/fine_sheet.dart';
+import 'package:expense_tracker/widgets/glass.dart';
 import 'package:expense_tracker/widgets/split_card.dart';
 
 Expense _spend(String id, double amount, DateTime date) => Expense(
@@ -61,6 +63,17 @@ void main() {
       expect(pool.settlements.length, 3);
       expect(pool.settlements.every((s) => s.to == 'Азамат'), isTrue);
       expect(pool.settlements.every((s) => s.amount == 2000), isTrue);
+    });
+
+    test('two buyers owe each other a quarter, netted to one transfer', () {
+      final pool = sharedPool([buy('Азамат', 4000), buy('Аслан', 2000)]);
+      Settlement between(String from, String to) =>
+          pool.settlements.singleWhere((s) => s.from == from && s.to == to);
+      // Аслан owes Азамат 1 000 and is owed 500 back: 500 in all.
+      expect(between('Аслан', 'Азамат').amount, 500);
+      expect(between('Мухаммад', 'Азамат').amount, 1000);
+      expect(between('Мухаммад', 'Аслан').amount, 500);
+      expect(pool.settlements.any((s) => s.from == 'Азамат'), isFalse);
     });
 
     test('the personal part of a receipt is not split', () {
@@ -260,6 +273,27 @@ void main() {
       'Аслан': kVoteYes,
       'Мухаммад': kVoteYes,
     };
+
+    testWidgets('anyone can be fined, yourself included', (tester) async {
+      Expense? proposed;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: GlassSheet(
+            child: FineSheet(myName: 'Аслан', onSubmit: (e) => proposed = e),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('Аслан (я)'));
+      await tester.enterText(find.byType(TextField).last, 'опоздал');
+      await tester.tap(find.text('Предложить штраф'));
+      await tester.pump();
+
+      expect(proposed!.offender, 'Аслан');
+      // Owning up: already accepted, and the other three decide.
+      expect(proposed!.offenderVote, kOffenderAccept);
+      expect(proposed!.votes, isEmpty);
+      expect(fineAwaiting(proposed!), ['Азамат', 'Мухаммад', 'Имран']);
+    });
 
     test('the offender is not a judge', () {
       expect(fineJudges(fine()), ['Азамат', 'Аслан', 'Мухаммад']);

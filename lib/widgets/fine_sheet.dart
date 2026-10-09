@@ -13,7 +13,8 @@ import '../theme.dart';
 const double kDefaultFine = 5000;
 
 /// Proposes a fine: whom, how much, and what for. Whoever proposes it has
-/// voted yes already; the rest of the flat decides.
+/// voted yes already; the rest of the flat decides. Anyone can be fined,
+/// the proposer included.
 class FineSheet extends StatefulWidget {
   final String myName;
   final ValueChanged<Expense> onSubmit;
@@ -54,6 +55,9 @@ class _FineSheetState extends State<FineSheet> {
       setState(() => _error = 'Напишите, за что');
       return;
     }
+    // Fining yourself is owning up: your answer is already "accept", and
+    // the other three only decide whether it stands.
+    final self = _offender == widget.myName;
     widget.onSubmit(Expense(
       id: const Uuid().v4(),
       amount: amount,
@@ -63,17 +67,14 @@ class _FineSheetState extends State<FineSheet> {
       type: TransactionType.fine,
       author: widget.myName,
       offender: _offender,
-      votes: {widget.myName: kVoteYes},
+      votes: self ? const {} : {widget.myName: kVoteYes},
+      offenderVote: self ? kOffenderAccept : null,
     ));
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final others = [
-      for (final name in kRoommates)
-        if (name != widget.myName) name,
-    ];
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -98,9 +99,9 @@ class _FineSheetState extends State<FineSheet> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final name in others)
+                for (final name in kRoommates)
                   ChoiceChip(
-                    label: Text(name),
+                    label: Text(name == widget.myName ? '$name (я)' : name),
                     selected: _offender == name,
                     onSelected: (_) => setState(() {
                       _offender = name;
