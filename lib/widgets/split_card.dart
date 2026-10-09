@@ -158,17 +158,18 @@ class SplitCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    if (offset.involves(myName))
-                      _SettleButton(
-                        label: 'Зачесть',
-                        color: goldFor(context),
-                        onPressed: () => onOffset(offset),
-                      )
-                    else
-                      _Status(
-                        'встречные',
-                        accentForeground(context).withValues(alpha: 0.45),
-                      ),
+                    _ActionSlot(
+                      child: offset.involves(myName)
+                          ? _SettleButton(
+                              label: 'Зачесть',
+                              color: goldFor(context),
+                              onPressed: () => onOffset(offset),
+                            )
+                          : _Status(
+                              'встречные',
+                              accentForeground(context).withValues(alpha: 0.45),
+                            ),
+                    ),
                   ],
                 ),
               ),
@@ -194,7 +195,7 @@ class SplitCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    _action(context, settlement),
+                    _ActionSlot(child: _action(context, settlement)),
                   ],
                 ),
               ),
@@ -256,6 +257,25 @@ const _kSettleText = TextStyle(
   fontSize: 13,
   fontWeight: FontWeight.w500,
 );
+
+/// A fixed-width home for a row's button or status, right-aligned, so the
+/// amount beside it stays put whichever label the row is showing.
+class _ActionSlot extends StatelessWidget {
+  final Widget child;
+
+  const _ActionSlot({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 112,
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: FittedBox(fit: BoxFit.scaleDown, child: child),
+      ),
+    );
+  }
+}
 
 /// A compact text button that tints only while pressed. On the web a
 /// tapped button keeps focus after the dialog closes, and the default
