@@ -196,6 +196,46 @@ void main() {
     expect(pool.perPerson, 1625);
   });
 
+  test('paying a fine changes nobody\'s spending', () {
+    final records = [fine('Имран', 6000)];
+    final owed = sharedPool(records);
+    final paid = sharedPool([
+      ...records,
+      for (final s in owed.settlements) pay(s.from, s.to, s.amount),
+    ]);
+    for (final p in paid.people) {
+      expect(p.spent, 0, reason: p.name);
+    }
+  });
+
+  test('a payment covering shopping and a fine counts only the shopping', () {
+    final records = [buy('Азамат', 8000), fine('Имран', 6000)];
+    // Имран owes Азамат 2 000 for shopping and 2 000 for the fine.
+    final pool = sharedPool([...records, pay('Имран', 'Азамат', 4000)]);
+    expect(person(pool, 'Имран').spent, 2000);
+    expect(person(pool, 'Азамат').spent, 6000);
+  });
+
+  test('once everyone has paid up, each has spent exactly a quarter', () {
+    final records = [
+      buy('Азамат', 8000),
+      buy('Аслан', 2000, personal: 400),
+      fine('Мухаммад', 3000),
+    ];
+    final pool = sharedPool(records);
+    for (final o in pool.offsets) {
+      records.add(offset(o.a, o.b, o.amount));
+    }
+    for (final s in sharedPool(records).settlements) {
+      records.add(pay(s.from, s.to, s.amount));
+    }
+    final done = sharedPool(records);
+    expect(done.isSettled, isTrue);
+    for (final p in done.people) {
+      expect(p.spent, closeTo(done.perPerson, 1), reason: p.name);
+    }
+  });
+
   test('random flats always add up, and settle to zero when paid', () {
     final rng = Random(42);
     for (var round = 0; round < 300; round++) {
@@ -236,6 +276,27 @@ void main() {
       }
       final done = sharedPool(records);
       expect(done.isSettled, isTrue, reason: 'round $round settled');
+      // Paid up, each has spent exactly their own whole-tenge share of
+      // every purchase: no more, no less, and nothing from fines.
+      final ownShares = {for (final n in kRoommates) n: 0.0};
+      for (final e in records) {
+        if (e.type != TransactionType.expense) continue;
+        final shares = splitEvenly(e.sharedAmount, kRoommateCount);
+        for (var i = 0; i < kRoommates.length; i++) {
+          ownShares[kRoommates[i]] = ownShares[kRoommates[i]]! + shares[i];
+        }
+      }
+      for (final p in done.people) {
+        expect(p.spent, closeTo(ownShares[p.name]!, kSettledThreshold),
+            reason: 'round $round ${p.name} spent');
+      }
+
+      // And it does not matter in what order the records come back.
+      final shuffled = sharedPool([...records]..shuffle(rng));
+      for (final p in shuffled.people) {
+        expect(p.spent, closeTo(ownShares[p.name]!, kSettledThreshold),
+            reason: 'round $round ${p.name} spent, shuffled');
+      }
       for (final p in done.people) {
         expect(p.balance.abs(), lessThan(kSettledThreshold),
             reason: 'round $round ${p.name}');

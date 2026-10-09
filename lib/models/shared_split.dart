@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'expense.dart';
 import 'fines.dart';
 import 'shared_budget.dart';
@@ -16,9 +18,11 @@ class PoolPerson {
   /// Positive: the others owe them this much. Negative: they owe it.
   final double balance;
 
-  /// What they have actually spent on the flat: their purchases, plus debts
-  /// they paid back, minus what was paid back to them.
-  double get spent => paid + sent - received;
+  /// What they have actually spent on the flat's shopping: their purchases,
+  /// plus what they paid back towards others' purchases, minus what was
+  /// paid back to them for their own. Money moving because of a fine never
+  /// counts here.
+  final double spent;
 
   const PoolPerson({
     required this.name,
@@ -26,6 +30,7 @@ class PoolPerson {
     required this.sent,
     required this.received,
     required this.balance,
+    required this.spent,
   });
 }
 
@@ -175,6 +180,7 @@ SharedPool sharedPool(List<Expense> expenses) {
   }
 
   _carryOverpayments(owes);
+  final spentShift = _shoppingRepaid(expenses);
 
   final people = [
     for (final name in kRoommates)
@@ -183,6 +189,7 @@ SharedPool sharedPool(List<Expense> expenses) {
         paid: paid[name]!,
         sent: sent[name]!,
         received: received[name]!,
+        spent: paid[name]! + spentShift[name]!,
         balance: [
           for (final other in kRoommates)
             owes[other]![name]! - owes[name]![other]!,
@@ -196,6 +203,104 @@ SharedPool sharedPool(List<Expense> expenses) {
     settlements: _settle(owes),
     offsets: _offsets(owes),
   );
+}
+
+/// How much of the money that changed hands went towards the flat's
+/// shopping, per flatmate: positive for what they paid back on purchases,
+/// negative for what they were paid back for theirs.
+///
+/// Each pair's debt is kept in two parts, shopping and fines. A payment or
+/// an offset settles the payer's shopping debt first, then their fine,
+/// then any credit the other side holds from an earlier overpayment; what
+/// is left is a new overpayment, held as credit exactly as [sharedPool]
+/// holds it, so later debts eat into it the same way. At the end, a credit
+/// that is cancelling a fine in the same pair was fine money all along and
+/// is taken back out of the shopping count.
+Map<String, double> _shoppingRepaid(List<Expense> expenses) {
+  // shopping[a][b] < 0 is credit: b owes a from an overpayment.
+  final shopping = {
+    for (final a in kRoommates) a: {for (final b in kRoommates) b: 0.0},
+  };
+  final fines = {
+    for (final a in kRoommates) a: {for (final b in kRoommates) b: 0.0},
+  };
+  final shift = {for (final name in kRoommates) name: 0.0};
+
+  void count(String from, String to, double amount) {
+    shift[from] = shift[from]! + amount;
+    shift[to] = shift[to]! - amount;
+  }
+
+  void settle(String from, String to, double amount) {
+    var rest = amount;
+    final toShopping = min(rest, max(0.0, shopping[from]![to]!));
+    shopping[from]![to] = shopping[from]![to]! - toShopping;
+    rest -= toShopping;
+    final toFine = min(rest, fines[from]![to]!);
+    fines[from]![to] = fines[from]![to]! - toFine;
+    rest -= toFine;
+    final toCredit = min(rest, max(0.0, -shopping[to]![from]!));
+    shopping[to]![from] = shopping[to]![from]! + toCredit;
+    rest -= toCredit;
+    shopping[from]![to] = shopping[from]![to]! - rest;
+    count(from, to, toShopping + toCredit + rest);
+  }
+
+  // Every purchase and fine first, then payments and offsets oldest first
+  // (ties keep the order they came in). A payment can only ever be made
+  // against debts that already exist, so taking all debts first makes the
+  // split independent of how records are dated or ordered.
+  bool movesMoney(Expense e) => e.isTransfer || e.isOffset;
+  final ordered = [
+    for (var i = 0; i < expenses.length; i++) (i, expenses[i]),
+  ]..sort((x, y) {
+      final byKind =
+          (movesMoney(x.$2) ? 1 : 0).compareTo(movesMoney(y.$2) ? 1 : 0);
+      if (byKind != 0) return byKind;
+      final byDate = x.$2.date.compareTo(y.$2.date);
+      return byDate != 0 ? byDate : x.$1.compareTo(y.$1);
+    });
+
+  for (final (_, expense) in ordered) {
+    final author = expense.author;
+    final to = expense.recipient;
+    if (expense.isFine) {
+      final offender = expense.offender;
+      if (fineStatus(expense) != FineStatus.active ||
+          !fines.containsKey(offender)) {
+        continue;
+      }
+      final judges = fineJudges(expense);
+      final shares = splitEvenly(expense.amount, judges.length);
+      for (var i = 0; i < judges.length; i++) {
+        fines[offender]![judges[i]] = fines[offender]![judges[i]]! + shares[i];
+      }
+    } else if (expense.isTransfer || expense.isOffset) {
+      if (expense.isTransfer && !expense.confirmed) continue;
+      if (!shift.containsKey(author) || !shift.containsKey(to)) continue;
+      settle(author, to!, expense.amount);
+      if (expense.isOffset) settle(to, author, expense.amount);
+    } else if (!expense.isIncome && shift.containsKey(author)) {
+      final shares = splitEvenly(expense.sharedAmount, kRoommateCount);
+      for (var i = 0; i < kRoommates.length; i++) {
+        final other = kRoommates[i];
+        if (other != author) {
+          shopping[other]![author] = shopping[other]![author]! + shares[i];
+        }
+      }
+    }
+  }
+
+  // Credit sitting against a fine in the same direction: the overpayment
+  // that made it covered that fine, so it was never shopping money.
+  for (final a in kRoommates) {
+    for (final b in kRoommates) {
+      if (a == b) continue;
+      final cancelled = min(fines[a]![b]!, max(0.0, -shopping[a]![b]!));
+      if (cancelled > 0) count(b, a, cancelled);
+    }
+  }
+  return shift;
 }
 
 /// A debt paid down past zero means the payer handed over too much: the
