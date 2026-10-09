@@ -201,6 +201,14 @@ class SplitCard extends StatelessWidget {
   }
 }
 
+/// One text style for everything in a "who pays whom" row's action slot,
+/// buttons and status labels alike, so the column reads as one.
+const _kSettleText = TextStyle(
+  fontFamily: 'Onest',
+  fontSize: 13,
+  fontWeight: FontWeight.w500,
+);
+
 /// A compact text button that tints only while pressed. On the web a
 /// tapped button keeps focus after the dialog closes, and the default
 /// focus tint read as a coloured fill.
@@ -228,6 +236,7 @@ class _SettleButton extends StatelessWidget {
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         minimumSize: const Size(0, 26),
+        textStyle: _kSettleText,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ).copyWith(
         overlayColor: WidgetStateProperty.resolveWith(
@@ -261,8 +270,7 @@ class _Status extends StatelessWidget {
           : null,
       child: Text(
         text,
-        style:
-            TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500),
+        style: _kSettleText.copyWith(color: color),
       ),
     );
   }
