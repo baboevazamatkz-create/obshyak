@@ -7,6 +7,16 @@ const kRoommates = ['Азамат', 'Аслан', 'Мухаммад', 'Имра�
 /// The one flatmate who may delete records and clear the budget.
 const kAdminName = 'Азамат';
 
+/// The code each flatmate types to sign in as themselves. It keeps people
+/// from picking someone else's name by mistake; it is not a secret, since
+/// it ships in the web build.
+const kRoommateCodes = {
+  'Азамат': '2807',
+  'Аслан': '1101',
+  'Мухаммад': '1102',
+  'Имран': '1103',
+};
+
 /// How many people the shared total is split between.
 const kRoommateCount = 4;
 

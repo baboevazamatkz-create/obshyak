@@ -575,7 +575,13 @@ void main() {
 
     test('a stored name that is no longer one of the four is forgotten',
         () async {
-      SharedPreferences.setMockInitialValues({'my_name': 'Незнакомец'});
+      SharedPreferences.setMockInitialValues({'my_name_v2': 'Незнакомец'});
+      expect(await NameStore.load(), isNull);
+    });
+
+    test('a name picked before the codes came in has to sign in again',
+        () async {
+      SharedPreferences.setMockInitialValues({'my_name': 'Аслан'});
       expect(await NameStore.load(), isNull);
     });
   });
@@ -611,7 +617,26 @@ void main() {
       expect(find.text(name), findsOneWidget);
     }
     await tester.tap(find.text('Аслан'));
+    await tester.pumpAndSettle();
+    expect(picked, isNull, reason: 'the code comes first');
+
+    await tester.enterText(find.byType(TextField), '2807');
+    await tester.pumpAndSettle();
+    expect(find.text('Неверный код'), findsOneWidget);
+    expect(picked, isNull, reason: "Азамат's code does not open Аслан");
+
+    await tester.enterText(find.byType(TextField), '1101');
+    await tester.pumpAndSettle();
     expect(picked, 'Аслан');
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  test('every flatmate has their own four-digit code', () {
+    expect(kRoommateCodes.keys, unorderedEquals(kRoommates));
+    expect(kRoommateCodes.values.toSet(), hasLength(kRoommates.length));
+    for (final code in kRoommateCodes.values) {
+      expect(code, matches(RegExp(r'^\d{4}$')));
+    }
   });
 
   group('the pool card', () {
