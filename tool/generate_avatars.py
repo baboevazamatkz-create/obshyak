@@ -19,7 +19,7 @@ Requires Pillow.
 import argparse
 import os
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SIZE = 128
@@ -36,23 +36,29 @@ FRAME = (28, 28, 36, 255)
 CHEEK = (236, 140, 130, 90)
 
 PEOPLE = [
-    # file, background, hair, face width, beard, glasses
-    ('azamat', (196, 160, 92, 255), BLACK_HAIR, 1.0, 'long', False),
-    ('aslan', (74, 150, 140, 255), BLACK_HAIR, 0.86, 'short', False),
-    ('muhammad', (132, 102, 176, 255), BROWN_HAIR, 1.0, 'medium', True),
-    ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, None, True),
+    # file, background, hair, face width, beard, glasses, face size, centre
+    # The long beard needs the face smaller and higher to end inside the
+    # disc rather than run off its edge.
+    ('azamat', (196, 160, 92, 255), BLACK_HAIR, 1.0, 'long', False, 0.86, 0.44),
+    ('aslan', (74, 150, 140, 255), BLACK_HAIR, 0.78, 'stubble', False, 1.0, 0.53),
+    ('muhammad', (132, 102, 176, 255), BROWN_HAIR, 1.0, 'medium', True, 1.0, 0.52),
+    ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, None, True, 1.0, 0.53),
 ]
+
+# How much of the hair colour shows through each beard. Stubble is the same
+# shape as a beard, only short and thin, so it is drawn see-through.
+BEARD_OPACITY = {'long': 1.0, 'medium': 1.0, 'stubble': 0.42}
 
 
 def ellipse(draw, cx, cy, rx, ry, **kw):
     draw.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), **kw)
 
 
-def face(background, hair, width, beard, glasses):
+def face(background, hair, width, beard, glasses, size, centre):
     image = Image.new('RGBA', (S, S), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    cx, cy = S / 2, S * 0.53
-    rx, ry = S * 0.30 * width, S * 0.34
+    cx, cy = S / 2, S * centre
+    rx, ry = S * 0.30 * width * size, S * 0.34 * size
 
     # Hair behind the head, then the face over it.
     ellipse(draw, cx, cy - ry * 0.15, rx + S * 0.035, ry * 0.98, fill=hair)
@@ -72,28 +78,41 @@ def face(background, hair, width, beard, glasses):
 
     if beard:
         top, depth = {
-            'long': (0.16, ry + S * 0.24),
-            'medium': (0.18, ry + S * 0.07),
-            'short': (0.24, ry * 0.80),
+            'long': (0.16, ry + S * 0.16),
+            'medium': (0.18, ry + S * 0.035),
+            'stubble': (0.26, ry * 0.76),
         }[beard]
         by = cy + ry * top
-        draw.chord((cx - rx, by - depth, cx + rx, by + depth), 0, 180, fill=hair)
+        layer = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+        ld = ImageDraw.Draw(layer)
+        clear = (0, 0, 0, 0)
+        ld.chord((cx - rx, by - depth, cx + rx, by + depth), 0, 180, fill=hair)
         # Sideburns joining beard to hair.
         for side in (-1, 1):
             x0 = cx + side * rx
-            x1 = cx + side * (rx - S * 0.055)
-            draw.polygon([(x0, cy - ry * 0.35), (x1, cy - ry * 0.35),
-                          (x1, by + S * 0.02), (x0, by + S * 0.02)], fill=hair)
-        # Cheeks over the beard's top edge, so it starts in a curve along
-        # the cheekbones instead of a straight line like a mask.
+            x1 = cx + side * (rx - S * 0.05)
+            ld.polygon([(x0, cy - ry * 0.35), (x1, cy - ry * 0.35),
+                        (x1, by + S * 0.02), (x0, by + S * 0.02)], fill=hair)
+        # Cheeks cut out of the beard's top edge, so it starts in a curve
+        # along the cheekbones instead of a straight line like a mask.
         for side in (-1, 1):
-            ellipse(draw, cx + side * rx * 0.45, by, rx * 0.42, ry * 0.15,
-                    fill=SKIN)
+            ellipse(ld, cx + side * rx * 0.45, by, rx * 0.42, ry * 0.15,
+                    fill=clear)
         # A clear patch round the mouth, then the moustache over it.
-        ellipse(draw, cx, cy + ry * 0.42, rx * 0.30, ry * 0.12, fill=SKIN)
+        ellipse(ld, cx, cy + ry * 0.42, rx * 0.30, ry * 0.12, fill=clear)
         for side in (-1, 1):
-            ellipse(draw, cx + side * rx * 0.17, cy + ry * 0.29,
+            ellipse(ld, cx + side * rx * 0.17, cy + ry * 0.29,
                     rx * 0.20, ry * 0.075, fill=hair)
+        # Keep the face's own outline: nothing of the beard outside the
+        # jaw except what hangs below the chin.
+        opacity = BEARD_OPACITY[beard]
+        if opacity < 1:
+            # Stubble grows on the face, never past it: clip to the jaw.
+            jaw = Image.new('L', (S, S), 0)
+            ellipse(ImageDraw.Draw(jaw), cx, cy, rx, ry, fill=255)
+            alpha = layer.getchannel('A').point(lambda a: int(a * opacity))
+            layer.putalpha(ImageChops.multiply(alpha, jaw))
+        image.alpha_composite(layer)
     else:
         cheeks = Image.new('RGBA', (S, S), (0, 0, 0, 0))
         cheek_draw = ImageDraw.Draw(cheeks)

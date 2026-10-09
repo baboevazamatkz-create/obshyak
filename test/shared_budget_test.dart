@@ -65,15 +65,23 @@ void main() {
       expect(pool.settlements.every((s) => s.amount == 2000), isTrue);
     });
 
-    test('two buyers owe each other a quarter, netted to one transfer', () {
+    test('two buyers owe each other a quarter, both debts kept', () {
       final pool = sharedPool([buy('Азамат', 4000), buy('Аслан', 2000)]);
       Settlement between(String from, String to) =>
           pool.settlements.singleWhere((s) => s.from == from && s.to == to);
-      // Аслан owes Азамат 1 000 and is owed 500 back: 500 in all.
-      expect(between('Аслан', 'Азамат').amount, 500);
+      expect(between('Аслан', 'Азамат').amount, 1000);
+      expect(between('Азамат', 'Аслан').amount, 500);
       expect(between('Мухаммад', 'Азамат').amount, 1000);
       expect(between('Мухаммад', 'Аслан').amount, 500);
-      expect(pool.settlements.any((s) => s.from == 'Азамат'), isFalse);
+    });
+
+    test('a debtor buying something big does not wipe their debt', () {
+      final pool = sharedPool([buy('Азамат', 8000), buy('Аслан', 8000)]);
+      Settlement between(String from, String to) =>
+          pool.settlements.singleWhere((s) => s.from == from && s.to == to);
+      // Equal purchases: the two still owe each other until both pay.
+      expect(between('Аслан', 'Азамат').amount, 2000);
+      expect(between('Азамат', 'Аслан').amount, 2000);
     });
 
     test('the personal part of a receipt is not split', () {
@@ -114,14 +122,16 @@ void main() {
       expect(pool.settlements.any((s) => s.from == 'Аслан'), isTrue);
     });
 
-    test('everyone paying their quarter leaves nothing to settle', () {
+    test('equal purchases still leave every debt to be paid back', () {
       final pool = sharedPool([
-        for (final name in kRoommates) buy(name, 3000),
+        for (final name in kRoommates) buy(name, 4000),
       ]);
-      expect(pool.isSettled, isTrue);
+      // Balances are even, but nobody's debt cancels anybody else's.
       for (final p in pool.people) {
         expect(p.balance, 0);
       }
+      expect(pool.settlements.length, 12);
+      expect(pool.settlements.every((s) => s.amount == 1000), isTrue);
     });
 
     test('balances always add up to zero', () {
@@ -226,11 +236,16 @@ void main() {
       );
     });
 
-    test('purchases that even out by themselves close it too', () {
-      expect(
-        periodIsClosed([for (final name in kRoommates) buy(name, 3000)]),
-        isTrue,
-      );
+    test('even purchases close the period only once every debt is paid', () {
+      final open = [for (final name in kRoommates) buy(name, 4000)];
+      expect(periodIsClosed(open), isFalse);
+      final paid = [
+        ...open,
+        for (final from in kRoommates)
+          for (final to in kRoommates)
+            if (from != to) paidBack(from, to, 1000),
+      ];
+      expect(periodIsClosed(paid), isTrue);
     });
 
     test('history groups records by the moment their period closed', () {

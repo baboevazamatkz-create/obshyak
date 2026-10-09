@@ -52,8 +52,8 @@ class SharedPool {
   /// Everything bought for the flat, personal parts left out.
   final double sharedTotal;
 
-  /// What each pair of flatmates owes the other once their debts to each
-  /// other are netted: at most one transfer per pair.
+  /// Every debt still open, one per direction between two flatmates: a
+  /// debt is never cancelled out by one running the other way.
   final List<Settlement> settlements;
 
   const SharedPool({
@@ -77,7 +77,7 @@ SharedPool sharedPool(List<Expense> expenses) {
   final paid = {for (final name in kRoommates) name: 0.0};
   final sent = {for (final name in kRoommates) name: 0.0};
   final fined = {for (final name in kRoommates) name: 0.0};
-  // owes[a][b]: what a owes b, before netting against what b owes a.
+  // owes[a][b]: what a still owes b. Never netted against owes[b][a].
   final owes = {
     for (final a in kRoommates) a: {for (final b in kRoommates) b: 0.0},
   };
@@ -144,21 +144,20 @@ SharedPool sharedPool(List<Expense> expenses) {
   );
 }
 
-/// Nets each pair's debts against each other: if Аслан owes Азамат 1 000
-/// and Азамат owes Аслан 500, that is one transfer of 500 from Аслан.
-/// Pairs closer than [kSettledThreshold] are square.
+/// Every debt one flatmate still owes another, each on its own.
+///
+/// Debts are deliberately not netted: if Аслан owes Азамат 2 000 and then
+/// Азамат comes to owe Аслан 2 000, both stay until each is paid and
+/// confirmed. Netting them made a debt vanish the moment the debtor bought
+/// something big, which is not how the flat settles up.
 List<Settlement> _settle(Map<String, Map<String, double>> owes) {
   final result = <Settlement>[];
-  for (var i = 0; i < kRoommates.length; i++) {
-    for (var j = i + 1; j < kRoommates.length; j++) {
-      final a = kRoommates[i];
-      final b = kRoommates[j];
-      final net = owes[a]![b]! - owes[b]![a]!;
-      final amount = net.abs().roundToDouble();
+  for (final from in kRoommates) {
+    for (final to in kRoommates) {
+      if (from == to) continue;
+      final amount = owes[from]![to]!.roundToDouble();
       if (amount < kSettledThreshold) continue;
-      result.add(net > 0
-          ? Settlement(from: a, to: b, amount: amount)
-          : Settlement(from: b, to: a, amount: amount));
+      result.add(Settlement(from: from, to: to, amount: amount));
     }
   }
   return result;
