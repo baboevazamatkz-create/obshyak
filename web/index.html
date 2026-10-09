@@ -92,6 +92,20 @@
   </div>
 
   <script>
+    // Earlier versions installed Flutter's service worker, which keeps
+    // serving an old copy of the app. Remove it and what it cached, so a
+    // phone that has it picks up each new version on the next open.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (all) {
+        all.forEach(function (registration) { registration.unregister(); });
+      });
+    }
+    if (window.caches) {
+      caches.keys().then(function (keys) {
+        keys.forEach(function (key) { caches.delete(key); });
+      });
+    }
+
     // Flutter fires this once it has painted its first frame.
     window.addEventListener('flutter-first-frame', function () {
       var loader = document.getElementById('loading');

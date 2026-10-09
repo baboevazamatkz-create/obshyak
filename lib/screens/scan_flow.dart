@@ -61,23 +61,32 @@ class ScanFlow {
     }
     if (raw.isEmpty || !context.mounted) return;
 
+    // The spinner goes up before any work on the picture. On the web,
+    // decoding and shrinking a photo runs on the thread that draws, and on
+    // a slow phone that is a second or two in which nothing would move.
+    _showProgress(context);
+    void hideProgress() => Navigator.of(context, rootNavigator: true).pop();
+    // Let the spinner actually reach the screen before the work starts.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) return;
+
     // The photo kept with the records is the first snapshot only: a long
     // statement is still read in full, but it is saved as one picture.
     // Every record needs its receipt, so no photo means no record.
     final photo = await compute(prepareReceiptPhoto, raw.first);
     if (!context.mounted) return;
     if (photo == null) {
+      hideProgress();
       _toast(context, 'Не удалось прочитать фото чека');
       return;
     }
     // With nothing to read the receipt, it is typed in by hand -- with the
     // photo still attached.
     if (!recognize) {
+      hideProgress();
       await onManual(photo);
       return;
     }
-
-    _showProgress(context);
 
     // Cutting and re-encoding takes long enough to drop frames, and the
     // spinner is already on screen -- so it happens off the thread that

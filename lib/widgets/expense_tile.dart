@@ -69,7 +69,7 @@ class ExpenseTile extends StatelessWidget {
                     ? Icons.arrow_downward_rounded
                     : Icons.shopping_basket_outlined;
     final title = expense.isOffset
-        ? '${expense.author} ⇄ ${expense.recipient ?? ''}'
+        ? '${expense.author} ←→ ${expense.recipient ?? ''}'
         : expense.isFine
             ? 'Штраф: ${expense.offender ?? ''}'
             : isTransfer

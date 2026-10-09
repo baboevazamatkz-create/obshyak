@@ -147,7 +147,7 @@ class SplitCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            '${offset.a} ⇄ ${offset.b}',
+                            '${offset.a} ←→ ${offset.b}',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 13.5, color: ink),
                           ),

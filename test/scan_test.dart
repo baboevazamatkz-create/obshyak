@@ -345,6 +345,10 @@ void main() {
         ),
       );
       await tester.tap(find.text('scan'));
+      // The spinner's first frame, which the flow waits for before it
+      // starts on the picture; then real time for the picture work.
+      await tester.pump();
+      await tester.pump();
       await tester.runAsync(() => Future<void>.delayed(
             const Duration(milliseconds: 500),
           ));

@@ -17,70 +17,76 @@ class NamePickerScreen extends StatelessWidget {
     return Scaffold(
       body: AppBackgroundPattern(
         child: SafeArea(
+          // Scrolls when it has to: four names at a large text size do not
+          // fit a small phone's height.
           child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Image.asset(
-                        'assets/obshak_mark.png',
-                        width: 72,
-                        height: 72,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Кто вы?',
-                      textAlign: TextAlign.center,
-                      style: wordmark(
-                        context,
-                        size: 22,
-                        color: goldFor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Имя запомнится на этом телефоне и запишется '
-                      'в каждый ваш расход',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: accentForeground(context).withValues(alpha: 0.7),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    for (final name in kRoommates) ...[
-                      OutlinedButton(
-                        onPressed: () => onPicked(name),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(56),
-                          side: BorderSide(
-                            color: goldFor(context).withValues(alpha: 0.55),
-                          ),
-                          foregroundColor: accentForeground(context),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Image.asset(
+                          'assets/obshak_mark.png',
+                          width: 72,
+                          height: 72,
                         ),
-                        child: Row(
-                          children: [
-                            Avatar(name, size: 34),
-                            const SizedBox(width: 14),
-                            Text(
-                              name,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w500,
-                              ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Кто вы?',
+                        textAlign: TextAlign.center,
+                        style: wordmark(
+                          context,
+                          size: 22,
+                          color: goldFor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Имя запомнится на этом телефоне и запишется '
+                        'в каждый ваш расход',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color:
+                              accentForeground(context).withValues(alpha: 0.7),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      for (final name in kRoommates) ...[
+                        OutlinedButton(
+                          onPressed: () => onPicked(name),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(56),
+                            side: BorderSide(
+                              color: goldFor(context).withValues(alpha: 0.55),
                             ),
-                          ],
+                            foregroundColor: accentForeground(context),
+                          ),
+                          child: Row(
+                            children: [
+                              Avatar(name, size: 34),
+                              const SizedBox(width: 14),
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

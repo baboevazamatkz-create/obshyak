@@ -685,7 +685,7 @@ void main() {
         extra: [theirs],
         onOffset: (o) => offered = o,
       );
-      expect(find.text('Азамат ⇄ Аслан'), findsOneWidget);
+      expect(find.text('Азамат ←→ Аслан'), findsOneWidget);
       // Азамат owes Аслан 1 000, Аслан owes Азамат 2 000: one line, with
       // what is left after the offset, instead of two opposing rows.
       expect(

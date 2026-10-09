@@ -112,18 +112,23 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
   Widget build(BuildContext context) {
     final gold = goldFor(context);
 
+    final media = MediaQuery.of(context);
+    // The rows hold text fields, so the on-screen keyboard comes up over
+    // the sheet: it is lifted above the keyboard and shrinks to the space
+    // left, rather than leaving the fields and the button underneath it.
+    final keyboard = media.viewInsets.bottom;
     return ConstrainedBox(
       // Forty rows would otherwise push the sheet to the top of the
       // screen, leaving nothing of the budget behind it to orient by.
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.86,
+        maxHeight: (media.size.height - keyboard) * 0.9 + keyboard,
       ),
       child: Padding(
         padding: EdgeInsets.only(
           left: 18,
           right: 18,
           top: 18,
-          bottom: MediaQuery.of(context).padding.bottom + 18,
+          bottom: (keyboard > 0 ? keyboard : media.padding.bottom) + 18,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

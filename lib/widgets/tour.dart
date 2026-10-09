@@ -90,76 +90,80 @@ class _TourDialogState extends State<_TourDialog> {
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
-        decoration: BoxDecoration(
-          gradient: heroGradientFor(context),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: hairlineColor(context)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${_index + 1} ИЗ ${steps.length}',
-                    style: microLabel(
-                      context,
-                      color: goldFor(context).withValues(alpha: 0.9),
+      // Scrolls when it has to: a long card at a large text size does not
+      // fit a small phone.
+      child: SingleChildScrollView(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+          decoration: BoxDecoration(
+            gradient: heroGradientFor(context),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: hairlineColor(context)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${_index + 1} ИЗ ${steps.length}',
+                      style: microLabel(
+                        context,
+                        color: goldFor(context).withValues(alpha: 0.9),
+                      ),
                     ),
                   ),
-                ),
-                if (!last)
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Пропустить'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              step.$1,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: ink,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              step.$2,
-              style: TextStyle(
-                fontSize: 14.5,
-                height: 1.4,
-                color: ink.withValues(alpha: 0.8),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                for (var i = 0; i < steps.length; i++)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: i == _index
-                          ? goldFor(context)
-                          : ink.withValues(alpha: 0.2),
+                  if (!last)
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Пропустить'),
                     ),
-                  ),
-                const Spacer(),
-                ElevatedButton(
-                  onPressed: _next,
-                  child: Text(last ? 'Понятно' : 'Далее'),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                step.$1,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: ink,
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                step.$2,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.4,
+                  color: ink.withValues(alpha: 0.8),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  for (var i = 0; i < steps.length; i++)
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: i == _index
+                            ? goldFor(context)
+                            : ink.withValues(alpha: 0.2),
+                      ),
+                    ),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: _next,
+                    child: Text(last ? 'Понятно' : 'Далее'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

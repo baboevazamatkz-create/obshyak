@@ -12,11 +12,25 @@ import 'theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ru');
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  if (FirebaseAuth.instance.currentUser == null) {
-    await FirebaseAuth.instance.signInAnonymously();
-  }
+  // Connecting happens inside the app, not before it starts: if it fails
+  // on a bad connection or a browser that blocks it, the app can say so
+  // and offer a retry instead of sitting on the loading screen for good.
   runApp(const ExpenseTrackerApp());
+}
+
+/// Starts Firebase and signs this phone in. Gives up after [timeout] so a
+/// stalled network turns into a message rather than an endless wait.
+Future<void> connectToBudget({
+  Duration timeout = const Duration(seconds: 20),
+}) async {
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ).timeout(timeout);
+  }
+  if (FirebaseAuth.instance.currentUser == null) {
+    await FirebaseAuth.instance.signInAnonymously().timeout(timeout);
+  }
 }
 
 class ExpenseTrackerApp extends StatelessWidget {
@@ -53,7 +67,7 @@ class ExpenseTrackerApp extends StatelessWidget {
           ),
         );
       },
-      home: const AppGate(),
+      home: const AppGate(connect: connectToBudget),
     );
   }
 }

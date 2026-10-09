@@ -51,6 +51,10 @@ jobs:
       # Pages serves this repository at /obshyak/, so the base href has to
       # match or every asset request 404s.
       #
+      # --no-web-resources-cdn serves Flutter's rendering engine from this
+      # site instead of Google's CDN, so the app starts on networks and
+      # in-app browsers that cannot reach gstatic.com.
+      #
       # SCAN_ENDPOINT is the scanner's address. Not a secret -- it is a
       # public endpoint whose own gate is a Firebase token -- so it lives in
       # a repository variable. Unset, the scanner button simply does not
@@ -58,6 +62,7 @@ jobs:
       - name: Build web app
         run: |
           flutter build web --release --base-href /obshyak/ \
+            --no-web-resources-cdn \
             --dart-define=SCAN_ENDPOINT="${SCAN_ENDPOINT}"
         env:
           SCAN_ENDPOINT: ${{ vars.SCAN_ENDPOINT }}

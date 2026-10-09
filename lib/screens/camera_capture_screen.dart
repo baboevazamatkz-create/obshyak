@@ -59,7 +59,9 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen> {
       );
       final controller = CameraController(
         camera,
-        ResolutionPreset.high,
+        // Full HD: small print on a receipt needs it, and the scanner cuts
+        // the picture down to what it reads anyway.
+        ResolutionPreset.veryHigh,
         enableAudio: false,
       );
       await controller.initialize();
