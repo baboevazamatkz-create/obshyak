@@ -17,6 +17,8 @@ void main() {
     ));
     await tester.pump();
     expect(find.textContaining('Не удалось подключиться'), findsOneWidget);
+    // The cause is shown, small, for a screenshot to carry.
+    expect(find.textContaining('offline'), findsOneWidget);
 
     await tester.tap(find.text('Повторить'));
     await tester.pump();

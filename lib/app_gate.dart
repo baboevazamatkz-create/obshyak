@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'data/name_store.dart';
 import 'screens/home_screen.dart';
 import 'screens/name_picker_screen.dart';
+import 'theme.dart';
 import 'widgets/app_background_pattern.dart';
 import 'widgets/orbit_loader.dart';
 
@@ -24,6 +25,10 @@ class _AppGateState extends State<AppGate> {
   bool _loading = true;
   bool _offline = false;
 
+  /// What went wrong, shown small under the message so a screenshot is
+  /// enough to tell a dead network from a bug.
+  String? _reason;
+
   @override
   void initState() {
     super.initState();
@@ -37,11 +42,12 @@ class _AppGateState extends State<AppGate> {
     });
     try {
       await widget.connect();
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(() {
           _loading = false;
           _offline = true;
+          _reason = error.toString();
         });
       }
       return;
@@ -93,6 +99,20 @@ class _AppGateState extends State<AppGate> {
                     onPressed: _load,
                     child: const Text('Повторить'),
                   ),
+                  if (_reason != null) ...[
+                    const SizedBox(height: 24),
+                    Text(
+                      _reason!,
+                      textAlign: TextAlign.center,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color:
+                            accentForeground(context).withValues(alpha: 0.45),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -18,15 +18,25 @@ Future<void> main() async {
   runApp(const ExpenseTrackerApp());
 }
 
+/// Whether Firebase has been started in this run, so a retry after a failed
+/// sign-in does not start it twice.
+///
+/// Kept here rather than asked of `Firebase.apps`: on the web that throws
+/// before Firebase is loaded, and the plugin only recognises Chrome's
+/// wording of that error. Safari's, which every browser on an iPhone uses,
+/// got through and made the app report no connection on every iPhone.
+bool _firebaseStarted = false;
+
 /// Starts Firebase and signs this phone in. Gives up after [timeout] so a
 /// stalled network turns into a message rather than an endless wait.
 Future<void> connectToBudget({
   Duration timeout = const Duration(seconds: 20),
 }) async {
-  if (Firebase.apps.isEmpty) {
+  if (!_firebaseStarted) {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     ).timeout(timeout);
+    _firebaseStarted = true;
   }
   if (FirebaseAuth.instance.currentUser == null) {
     await FirebaseAuth.instance.signInAnonymously().timeout(timeout);
