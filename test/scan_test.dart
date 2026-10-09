@@ -316,6 +316,68 @@ void main() {
   });
 
   group('The flow', () {
+    Future<Uint8List?> runFlow(
+      WidgetTester tester, {
+      required bool recognize,
+      required List<Uint8List> picked,
+    }) async {
+      Uint8List? manualPhoto;
+      var added = false;
+      final flow = ScanFlow(pickImages: (_) async => picked);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(Brightness.dark),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => flow.run(
+                  context,
+                  currency: AppCurrency.kzt,
+                  existing: const [],
+                  recognize: recognize,
+                  onAdd: (_, __) async => added = true,
+                  onManual: (photo) async => manualPhoto = photo,
+                ),
+                child: const Text('scan'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('scan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Выбрать из галереи'));
+      await tester.runAsync(() => Future<void>.delayed(
+            const Duration(milliseconds: 500),
+          ));
+      await tester.pumpAndSettle();
+      expect(added, isFalse);
+      return manualPhoto;
+    }
+
+    testWidgets('without the scanner, the receipt goes to the form by hand',
+        (tester) async {
+      final receipt = Uint8List.fromList(
+        img.encodePng(img.Image(width: 300, height: 600)),
+      );
+      final photo = await runFlow(tester, recognize: false, picked: [receipt]);
+      expect(photo, isNotNull, reason: 'the photo stays with the record');
+      expect(img.decodeJpg(photo!), isNotNull);
+    });
+
+    testWidgets('a receipt that cannot be read as an image adds nothing',
+        (tester) async {
+      final photo = await runFlow(
+        tester,
+        recognize: false,
+        picked: [
+          Uint8List.fromList([1, 2, 3, 4])
+        ],
+      );
+      expect(photo, isNull);
+      expect(find.text('Не удалось прочитать фото чека'), findsOneWidget);
+    });
+
     testWidgets('drops focus from whatever field was last typed into',
         (tester) async {
       final focusNode = FocusNode();
@@ -338,6 +400,7 @@ void main() {
                       currency: AppCurrency.rub,
                       existing: const [],
                       onAdd: (_, __) async {},
+                      onManual: (_) async {},
                     ),
                     child: const Text('scan'),
                   ),
@@ -529,6 +592,20 @@ void main() {
         {0},
       );
     });
+  });
+
+  test('a personal part set while reviewing reaches the record', () {
+    final row = ScannedTransaction(
+      type: TransactionType.expense,
+      amount: 5000,
+      currency: AppCurrency.kzt,
+      date: DateTime(2026, 10, 1),
+      note: 'Магнум',
+      category: ExpenseCategory.food,
+    ).copyWith(personal: 1200);
+    final expense = row.toExpense(householdCurrency: AppCurrency.kzt);
+    expect(expense.personal, 1200);
+    expect(expense.sharedAmount, 3800);
   });
 
   group('The review sheet', () {

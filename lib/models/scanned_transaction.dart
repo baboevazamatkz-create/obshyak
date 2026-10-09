@@ -29,6 +29,10 @@ class ScannedTransaction {
   /// marked in the list: the amount or the date was hard to read.
   final double confidence;
 
+  /// The part of this row that was for the person scanning alone, set while
+  /// reviewing. Kept out of what the flat splits.
+  final double personal;
+
   static const uncertainBelow = 0.6;
 
   const ScannedTransaction({
@@ -39,11 +43,13 @@ class ScannedTransaction {
     required this.note,
     required this.category,
     this.confidence = 1,
+    this.personal = 0,
   });
 
   bool get isUncertain => confidence < uncertainBelow;
 
   ScannedTransaction copyWith({
+    double? personal,
     TransactionType? type,
     double? amount,
     AppCurrency? currency,
@@ -59,6 +65,7 @@ class ScannedTransaction {
         note: note ?? this.note,
         category: category ?? this.category,
         confidence: confidence,
+        personal: personal ?? this.personal,
       );
 
   /// The worker validates and clamps before answering, so anything that
@@ -104,6 +111,7 @@ class ScannedTransaction {
         note: note,
         currency: householdCurrency,
         type: type,
+        personal: type == TransactionType.expense ? personal : 0,
       );
 }
 

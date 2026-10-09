@@ -121,6 +121,7 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
                   category: edited.category ?? row.category,
                   note: edited.note,
                   date: edited.date,
+                  personal: edited.personal,
                 );
                 _selected.add(index);
               });

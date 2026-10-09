@@ -224,15 +224,24 @@ Uint8List? prepareReceiptPhoto(Uint8List bytes) {
     return null;
   }
   if (decoded == null) return null;
-  final image = decoded.width > kReceiptWidth
-      ? img.copyResize(
-          decoded,
-          width: kReceiptWidth,
-          interpolation: img.Interpolation.average,
-        )
-      : decoded;
-  final jpeg = Uint8List.fromList(img.encodeJpg(image, quality: 70));
-  return jpeg.length <= kReceiptMaxBytes ? jpeg : null;
+  // A very long screenshot can still be too big at the usual size, so
+  // step down until it fits rather than keep no photo at all.
+  for (final (width, quality) in const [
+    (kReceiptWidth, 70),
+    (640, 60),
+    (480, 50),
+  ]) {
+    final image = decoded.width > width
+        ? img.copyResize(
+            decoded,
+            width: width,
+            interpolation: img.Interpolation.average,
+          )
+        : decoded;
+    final jpeg = Uint8List.fromList(img.encodeJpg(image, quality: quality));
+    if (jpeg.length <= kReceiptMaxBytes) return jpeg;
+  }
+  return null;
 }
 
 ScanImage _encode(img.Image image) => ScanImage(

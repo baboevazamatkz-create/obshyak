@@ -33,8 +33,10 @@ class ScanFlow {
     BuildContext context, {
     required AppCurrency currency,
     required List<Expense> existing,
-    required Future<void> Function(List<Expense> expenses, Uint8List? photo)
+    required Future<void> Function(List<Expense> expenses, Uint8List photo)
         onAdd,
+    required Future<void> Function(Uint8List photo) onManual,
+    bool recognize = true,
   }) async {
     // Drops focus from whatever field was last typed into -- adding an
     // expense, naming the budget. On the web this also blurs the hidden
@@ -60,8 +62,19 @@ class ScanFlow {
 
     // The photo kept with the records is the first snapshot only: a long
     // statement is still read in full, but it is saved as one picture.
+    // Every record needs its receipt, so no photo means no record.
     final photo = await compute(prepareReceiptPhoto, raw.first);
     if (!context.mounted) return;
+    if (photo == null) {
+      _toast(context, 'Не удалось прочитать фото чека');
+      return;
+    }
+    // With nothing to read the receipt, it is typed in by hand -- with the
+    // photo still attached.
+    if (!recognize) {
+      await onManual(photo);
+      return;
+    }
 
     _showProgress(context);
 
@@ -87,13 +100,15 @@ class ScanFlow {
     } on ScanException catch (error) {
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();
-        _toast(context, error.message);
+        _toast(context, '${error.message}. Заполните вручную');
+        await onManual(photo);
       }
       return;
     } catch (_) {
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();
-        _toast(context, 'Не удалось разобрать снимок');
+        _toast(context, 'Не удалось разобрать снимок. Заполните вручную');
+        await onManual(photo);
       }
       return;
     }

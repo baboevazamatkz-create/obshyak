@@ -213,11 +213,14 @@ def main():
         sheet.save(args.preview)
         return
 
+    # The app's copy, and one for the web page's loading animation, which
+    # runs before the app's own assets can be read.
     for name, img in faces:
-        path = os.path.join(ROOT, 'assets', 'avatars', f'{name}.png')
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        img.save(path, optimize=True)
-        print('wrote', os.path.relpath(path, ROOT))
+        for folder in (('assets', 'avatars'), ('web', 'avatars')):
+            path = os.path.join(ROOT, *folder, f'{name}.png')
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            img.save(path, optimize=True)
+            print('wrote', os.path.relpath(path, ROOT))
 
 
 if __name__ == '__main__':

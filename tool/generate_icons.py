@@ -28,7 +28,7 @@ CHAMPAGNE = (200, 168, 107, 255)   # #C8A86B, the app's gold
 SUPERSAMPLE = 4
 
 
-def draw_mark(size, *, plate, rounded, scale=1.0):
+def draw_mark(size, *, plate, rounded, scale=1.0, seats=True):
     """The mark on a [size] square.
 
     [plate] paints the obsidian background; without it the mark stands on
@@ -65,6 +65,8 @@ def draw_mark(size, *, plate, rounded, scale=1.0):
               fill=OBSIDIAN, anchor='mm')
 
     # The four flatmates, one at each corner around it.
+    if not seats:
+        return image.resize((size, size), Image.LANCZOS)
     seat = unit * 0.075
     reach = unit * 0.37
     for quarter in range(4):
@@ -104,6 +106,10 @@ def main():
     write('web/icons/apple-touch-icon-180.png',
           draw_mark(180, plate=True, rounded=False))
     write('assets/obshak_mark.png', draw_mark(256, plate=False, rounded=False))
+    # The coin alone, for the loading animation the four faces circle.
+    coin = draw_mark(256, plate=False, rounded=False, scale=2.0, seats=False)
+    write('assets/coin.png', coin)
+    write('web/icons/coin.png', coin.resize((128, 128), Image.LANCZOS))
 
 
 if __name__ == '__main__':

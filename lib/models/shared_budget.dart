@@ -4,6 +4,9 @@ import 'currency.dart';
 /// phone, and it is written into every record they enter.
 const kRoommates = ['Азамат', 'Аслан', 'Мухаммад', 'Имран'];
 
+/// The one flatmate who may delete records and clear the budget.
+const kAdminName = 'Азамат';
+
 /// How many people the shared total is split between.
 const kRoommateCount = 4;
 

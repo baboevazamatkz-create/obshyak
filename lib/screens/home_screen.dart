@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -64,6 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Scanning needs a worker to talk to. With none configured there is
   /// nothing behind the button, so it is not shown at all.
   bool get _scanEnabled => ScanService.isConfigured;
+
+  /// Only one flatmate may delete records or clear the budget.
+  bool get _isAdmin => widget.myName == kAdminName;
 
   // Held in fields rather than created inside build(): a stream built during
   // build is a brand-new Firestore listener on every rebuild, which drops the
@@ -253,11 +257,17 @@ class _HomeScreenState extends State<HomeScreen> {
     await _repository.confirmTransfer(kSharedBudgetCode, transfer.id);
   }
 
+  /// The only way to add a purchase: a photo or screenshot of its receipt.
+  /// With the scanner set up it reads the receipt; without it, or when it
+  /// cannot, the purchase is typed in by hand -- with the photo attached
+  /// either way, so every purchase has its receipt behind it.
   Future<void> _openScanner(List<Expense> expenses) async {
     await _scanFlow.run(
       context,
       currency: kBudgetCurrency,
       existing: expenses,
+      recognize: _scanEnabled,
+      onManual: _addByHand,
       onAdd: (scanned, photo) async {
         // The flat records purchases only; an incoming payment read off a
         // bank screenshot has nowhere to go.
@@ -272,11 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         // The photo is written first so that no record ever points at a
         // receipt that is not there.
-        String? receiptId;
-        if (photo != null) {
-          receiptId = const Uuid().v4();
-          await _repository.addReceipt(kSharedBudgetCode, receiptId, photo);
-        }
+        final receiptId = await _saveReceipt(photo);
         await _repository.addExpenses(
           kSharedBudgetCode,
           [
@@ -295,6 +301,32 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
       },
+    );
+  }
+
+  Future<String> _saveReceipt(Uint8List photo) async {
+    final receiptId = const Uuid().v4();
+    await _repository.addReceipt(kSharedBudgetCode, receiptId, photo);
+    return receiptId;
+  }
+
+  /// The purchase form, for a receipt the scanner did not read, with that
+  /// receipt's photo kept on the record.
+  Future<void> _addByHand(Uint8List photo) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => GlassSheet(
+        child: AddExpenseSheet(
+          type: TransactionType.expense,
+          currency: kBudgetCurrency,
+          onSubmit: (expense) async {
+            final receiptId = await _saveReceipt(photo);
+            await _addExpense(expense.copyWith(receiptId: receiptId));
+          },
+        ),
+      ),
     );
   }
 
@@ -346,21 +378,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Бюджет очищен')),
-    );
-  }
-
-  void _openAddSheet(TransactionType type) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => GlassSheet(
-        child: AddExpenseSheet(
-          type: type,
-          currency: kBudgetCurrency,
-          onSubmit: _addExpense,
-        ),
-      ),
     );
   }
 
@@ -431,8 +448,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return monthChanged ? _monthDivider(next) : const SizedBox(height: 7);
   }
 
-  /// The swipe-to-delete / tap-for-receipt row.
+  /// The tap-for-receipt row, which only the admin can swipe away.
   Widget _buildExpenseRow(Expense expense) {
+    final tile = ExpenseTile(
+      expense: expense,
+      currency: kBudgetCurrency,
+      onTap: expense.receiptId == null
+          ? null
+          : () => _showReceipt(expense.receiptId!),
+      // Saved records are not edited: a mistake is deleted and entered
+      // again, so nobody's figures change under them unnoticed.
+    );
+    if (!_isAdmin) return tile;
     return Dismissible(
       key: ValueKey(expense.id),
       direction: DismissDirection.endToStart,
@@ -449,15 +476,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       onDismissed: (_) => _deleteExpense(expense),
-      child: ExpenseTile(
-        expense: expense,
-        currency: kBudgetCurrency,
-        onTap: expense.receiptId == null
-            ? null
-            : () => _showReceipt(expense.receiptId!),
-        // Saved records are not edited: a mistake is deleted and entered
-        // again, so nobody's figures change under them unnoticed.
-      ),
+      child: tile,
     );
   }
 
@@ -475,24 +494,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// The one add button: a purchase always comes in through its receipt.
   Widget _scanButton(List<Expense> expenses) {
-    return FloatingActionButton.small(
+    return FloatingActionButton(
       heroTag: 'scan_receipt',
-      // A champagne wash blended into the sheet's own surface first, then
-      // the same fixed translucency as its neighbours, so all three buttons
-      // fade into the list behind them by the same amount.
-      backgroundColor: Color.alphaBlend(
-        goldFor(context).withValues(alpha: 0.14),
-        sheetSurface(context),
-      ).withValues(alpha: kFabFillOpacity),
-      foregroundColor: goldFor(context),
-      elevation: 3,
-      shape: CircleBorder(
-        side: BorderSide(color: goldFor(context).withValues(alpha: 0.55)),
-      ),
+      backgroundColor: kChampagne.withValues(alpha: kFabFillOpacity),
       onPressed: () => _openScanner(expenses),
-      tooltip: 'Распознать чек или скриншот — ИИ',
-      child: const AiScanIcon(size: 20),
+      tooltip: _scanEnabled
+          ? 'Добавить покупку по чеку — ИИ прочитает'
+          : 'Добавить покупку по фото чека',
+      child: _scanEnabled
+          ? const AiScanIcon(size: 26)
+          : const Icon(Icons.receipt_long_rounded),
     );
   }
 
@@ -568,27 +581,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  snapshot.hasData ? _clearButton() : const SizedBox.shrink(),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_scanEnabled) ...[
-                        _scanButton(expenses),
-                        const SizedBox(height: 14),
-                      ],
-                      FloatingActionButton(
-                        heroTag: 'add_expense',
-                        backgroundColor:
-                            (Theme.of(context).brightness == Brightness.dark
-                                    ? kChampagne
-                                    : kAccentColor)
-                                .withValues(alpha: kFabFillOpacity),
-                        onPressed: () => _openAddSheet(TransactionType.expense),
-                        tooltip: 'Добавить покупку',
-                        child: const Icon(Icons.add_rounded),
-                      ),
-                    ],
-                  ),
+                  snapshot.hasData && _isAdmin
+                      ? _clearButton()
+                      : const SizedBox.shrink(),
+                  _scanButton(expenses),
                 ],
               ),
             ),
