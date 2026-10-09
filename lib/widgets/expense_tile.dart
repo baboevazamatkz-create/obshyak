@@ -5,7 +5,6 @@ import '../models/currency.dart';
 import '../models/expense.dart';
 import '../models/fines.dart';
 import '../theme.dart';
-import 'avatar.dart';
 import 'glass.dart';
 
 final _dateFormat = DateFormat('d MMM', 'ru');
@@ -48,7 +47,6 @@ class ExpenseTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isIncome = expense.isIncome;
     final isTransfer = expense.isTransfer;
-    final isPurchase = !isTransfer && !isIncome && !expense.isFine;
     final fine = expense.isFine ? fineStatus(expense) : null;
     final accent = fine == FineStatus.voting || expense.isPendingTransfer
         ? kPendingColor
@@ -84,6 +82,8 @@ class ExpenseTile extends StatelessWidget {
           FineStatus.cancelled => 'отменён',
         },
       ],
+      if (!isTransfer && fine == null && expense.author.isNotEmpty)
+        expense.author,
       if (isTransfer) expense.confirmed ? 'вернул долг' : 'ожидает',
       if (isIncome && expense.note.isNotEmpty) expense.note,
       if (expense.personal > 0)
@@ -115,24 +115,19 @@ class ExpenseTile extends StatelessWidget {
                 return Row(
                   children: [
                     if (showIcon) ...[
-                      // A purchase shows whose it is; transfers and fines
-                      // keep their own sign.
-                      if (isPurchase && expense.author.isNotEmpty)
-                        Avatar(expense.author, size: 28)
-                      else
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: accent.withValues(alpha: 0.13),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: accent.withValues(alpha: 0.22),
-                              width: 1,
-                            ),
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.13),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: accent.withValues(alpha: 0.22),
+                            width: 1,
                           ),
-                          child: Icon(icon, color: accent, size: 15),
                         ),
+                        child: Icon(icon, color: accent, size: 15),
+                      ),
                       const SizedBox(width: 10),
                     ],
                     Expanded(
