@@ -5,15 +5,21 @@ import '../theme.dart';
 
 /// A short walk through the main screen, shown once to each phone.
 ///
-/// Five cards, one per thing a new flatmate needs to find: the pool, adding
-/// a receipt, paying, fines and history. Skipping or finishing both count
-/// as seen.
+/// Six cards: first what the app is for, then one per thing a new flatmate
+/// needs to find: the pool, adding a receipt, paying, fines and history.
+/// Skipping or finishing both count as seen.
 class OnboardingTour {
   OnboardingTour._();
 
   static const _seenKey = 'tour_seen_v1';
 
   static const _steps = [
+    (
+      'Что это такое',
+      'Общак — учёт общих трат для тех, кто живёт вместе и делит продукты. '
+          'Каждый покупает для всех, фото чека сохраняется, а в конце видно, '
+          'кто кому сколько должен. Всё делится на четверых.',
+    ),
     (
       'Общак',
       'Сверху видно, кто сколько потратил на общее и кто кому должен. '
@@ -50,6 +56,7 @@ class OnboardingTour {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.72),
       builder: (context) => const _TourDialog(),
     );
     await prefs.setBool(_seenKey, true);
