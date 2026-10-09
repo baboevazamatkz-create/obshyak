@@ -559,9 +559,9 @@ void main() {
       await pump(tester, me: 'Аслан', onPaid: (s) => paid = s);
 
       expect(find.text('Аслан → Азамат'), findsOneWidget);
-      expect(find.text('Оплачено'), findsOneWidget);
+      expect(find.text('Оплатить'), findsOneWidget);
       expect(find.text('не оплачено'), findsNWidgets(2));
-      await tester.tap(find.text('Оплачено'));
+      await tester.tap(find.text('Оплатить'));
       expect(paid!.from, 'Аслан');
       expect(paid!.to, 'Азамат');
     });
@@ -570,7 +570,7 @@ void main() {
         (tester) async {
       await pump(tester, me: 'Аслан', pending: [sent]);
       expect(find.text('ждёт подтверждения'), findsOneWidget);
-      expect(find.text('Оплачено'), findsNothing);
+      expect(find.text('Оплатить'), findsNothing);
     });
 
     testWidgets('the recipient confirms a pending transfer', (tester) async {

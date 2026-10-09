@@ -154,6 +154,10 @@ Color appBarGlassTint(BuildContext context) => _isDark(context)
 /// that the recipient has not confirmed yet.
 const Color kPendingColor = Color(0xFFE2B33C);
 
+/// A debt this phone's owner has to pay: the one action on the card that
+/// is theirs to take.
+const Color kPayColor = Color(0xFF5B9CF0);
+
 TextStyle microLabel(BuildContext context,
         {Color? color, double size = 10.5}) =>
     TextStyle(

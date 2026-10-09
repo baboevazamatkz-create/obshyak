@@ -163,8 +163,8 @@ class SplitCard extends StatelessWidget {
     if (waiting == null) {
       if (myName == settlement.from) {
         return _SettleButton(
-          label: 'Оплачено',
-          color: incomeColor(context),
+          label: 'Оплатить',
+          color: kPayColor,
           onPressed: () => onPaid(settlement),
         );
       }
