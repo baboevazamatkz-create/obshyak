@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
@@ -16,6 +17,7 @@ import 'package:expense_tracker/models/shared_split.dart';
 import 'package:expense_tracker/models/transaction_type.dart';
 import 'package:expense_tracker/data/scan_service.dart';
 import 'package:expense_tracker/screens/name_picker_screen.dart';
+import 'package:expense_tracker/widgets/expense_tile.dart';
 import 'package:expense_tracker/widgets/fine_banner.dart';
 import 'package:expense_tracker/widgets/fine_sheet.dart';
 import 'package:expense_tracker/widgets/glass.dart';
@@ -369,6 +371,26 @@ void main() {
         fineStatus(fine(votes: {'Азамат': kVoteYes, 'Аслан': kVoteNo})),
         FineStatus.cancelled,
       );
+    });
+
+    test('a cancelled fine says who cancelled it', () {
+      final cancelled = fine(votes: {'Азамат': kVoteYes, 'Аслан': kVoteNo});
+      expect(fineCancelledBy(cancelled), ['Аслан']);
+      expect(fineCancelledBy(fine()), isEmpty);
+    });
+
+    testWidgets('the list row of a cancelled fine names who cancelled it',
+        (tester) async {
+      await initializeDateFormatting('ru');
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ExpenseTile(
+            expense: fine(votes: {'Азамат': kVoteYes, 'Аслан': kVoteNo}),
+            currency: AppCurrency.kzt,
+          ),
+        ),
+      ));
+      expect(find.textContaining('отменил Аслан'), findsOneWidget);
     });
 
     test('after a dispute, the judges confirming again overrules it', () {

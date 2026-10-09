@@ -45,3 +45,9 @@ List<String> fineAwaiting(Expense fine) {
 }
 
 bool fineIsDisputed(Expense fine) => fine.offenderVote == kOffenderDispute;
+
+/// Who voted the fine down, in [kRoommates] order. Empty unless cancelled.
+List<String> fineCancelledBy(Expense fine) => [
+      for (final name in kRoommates)
+        if (fine.votes[name] == kVoteNo) name,
+    ];

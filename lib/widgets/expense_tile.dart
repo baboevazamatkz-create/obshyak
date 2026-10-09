@@ -83,7 +83,8 @@ class ExpenseTile extends StatelessWidget {
         switch (fine) {
           FineStatus.voting => 'голосование',
           FineStatus.active => 'назначен',
-          FineStatus.cancelled => 'отменён',
+          FineStatus.cancelled =>
+            'отменил ${fineCancelledBy(expense).join(', ')}',
         },
       ],
       if (!isTransfer &&
