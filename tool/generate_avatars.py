@@ -18,6 +18,7 @@ Requires Pillow.
 """
 import argparse
 import os
+import random
 
 from PIL import Image, ImageChops, ImageDraw
 
@@ -42,7 +43,7 @@ PEOPLE = [
     ('azamat', (196, 160, 92, 255), BLACK_HAIR, 1.0, 'long', False, 0.86, 0.44),
     ('aslan', (74, 150, 140, 255), BLACK_HAIR, 0.78, 'short', False, 1.0, 0.53),
     ('muhammad', (132, 102, 176, 255), BROWN_HAIR, 1.0, 'medium', True, 1.0, 0.52),
-    ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, None, True, 1.0, 0.53),
+    ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, 'sparse', True, 1.0, 0.53),
 ]
 
 # How much of the hair colour shows through each beard. Stubble is the same
@@ -79,11 +80,11 @@ def face(background, hair, width, beard, glasses, size, centre):
     eye_y = cy - ry * 0.06
     eye_dx = rx * 0.40
 
-    if beard:
+    if beard and beard != 'sparse':
         top, depth = {
             'long': (0.16, ry + S * 0.16),
             'medium': (0.18, ry + S * 0.035),
-            'short': (0.24, ry * 0.76),
+            'short': (0.30, ry * 0.70),
             'stubble': (0.26, ry * 0.76),
         }[beard]
         by = cy + ry * top
@@ -113,10 +114,9 @@ def face(background, hair, width, beard, glasses, size, centre):
         alpha = layer.getchannel('A').point(lambda a: int(a * opacity))
         if beard in JAW_BEARDS:
             # A short beard grows on the face, never past it: clip to the
-            # jaw, with a little room below the chin.
+            # face's own outline.
             jaw = Image.new('L', (S, S), 0)
-            ellipse(ImageDraw.Draw(jaw), cx, cy + ry * 0.03, rx, ry * 1.03,
-                    fill=255)
+            ellipse(ImageDraw.Draw(jaw), cx, cy, rx, ry, fill=255)
             alpha = ImageChops.multiply(alpha, jaw)
         layer.putalpha(alpha)
         image.alpha_composite(layer)
@@ -127,6 +127,30 @@ def face(background, hair, width, beard, glasses, size, centre):
             ellipse(cheek_draw, cx + side * rx * 0.58, cy + ry * 0.22,
                     rx * 0.16, ry * 0.08, fill=CHEEK)
         image.alpha_composite(cheeks)
+
+    if beard == 'sparse':
+        # A few short hairs scattered along the jaw and chin: very sparse
+        # stubble. Seeded, so every run draws the same face.
+        rng = random.Random(7)
+        hairs = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+        hd = ImageDraw.Draw(hairs)
+        colour = hair[:3] + (150,)
+        placed = 0
+        while placed < 26:
+            x = cx + rng.uniform(-1, 1) * rx * 0.92
+            y = cy + rng.uniform(0.22, 0.95) * ry
+            inside = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 < 0.86
+            near_mouth = abs(x - cx) < rx * 0.32 and abs(y - (cy + ry * 0.38)) < ry * 0.12
+            near_cheek = (abs(abs(x - cx) - rx * 0.58) < rx * 0.2
+                          and abs(y - (cy + ry * 0.22)) < ry * 0.1)
+            if not inside or near_mouth or near_cheek:
+                continue
+            tilt = rng.uniform(-0.5, 0.5)
+            length = S * 0.016
+            hd.line((x, y, x + length * tilt, y + length), fill=colour,
+                    width=max(1, int(S * 0.006)))
+            placed += 1
+        image.alpha_composite(hairs)
 
     # Smile.
     draw.arc((cx - rx * 0.26, cy + ry * 0.24, cx + rx * 0.26, cy + ry * 0.52),
