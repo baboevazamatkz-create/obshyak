@@ -9,6 +9,7 @@ import '../data/expense_repository.dart';
 import '../data/scan_service.dart';
 import '../models/currency.dart';
 import '../models/expense.dart';
+import '../models/fines.dart';
 import '../models/shared_budget.dart';
 import '../models/shared_split.dart';
 import '../models/transaction_type.dart';
@@ -17,6 +18,8 @@ import '../widgets/add_expense_sheet.dart';
 import '../widgets/ai_scan_icon.dart';
 import '../widgets/app_background_pattern.dart';
 import '../widgets/expense_tile.dart';
+import '../widgets/fine_banner.dart';
+import '../widgets/fine_sheet.dart';
 import '../widgets/glass.dart';
 import '../widgets/readable_width.dart';
 import '../widgets/receipt_dialog.dart';
@@ -166,6 +169,51 @@ class _HomeScreenState extends State<HomeScreen> {
       recipient: settlement.to,
       confirmed: false,
     ));
+  }
+
+  void _openFineSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => GlassSheet(
+        child: FineSheet(myName: widget.myName, onSubmit: _addExpense),
+      ),
+    );
+  }
+
+  Future<void> _voteOnFine(Expense fine, String vote) async {
+    final cancel = vote == kVoteNo;
+    final sure = await _ask(
+      cancel ? 'Отменить штраф?' : 'Назначить штраф?',
+      cancel
+          ? 'Один голос против отменяет штраф для всех.'
+          : '${fine.offender} будет должен '
+              '${kBudgetCurrency.format.format(fine.amount)} остальным.',
+      cancel ? 'Да, отменить' : 'Да, назначить',
+    );
+    if (!sure) return;
+    await _repository.voteOnFine(
+      kSharedBudgetCode,
+      fine.id,
+      widget.myName,
+      vote,
+    );
+  }
+
+  Future<void> _answerFine(Expense fine, String answer) async {
+    final dispute = answer == kOffenderDispute;
+    final sure = await _ask(
+      dispute ? 'Оспорить штраф?' : 'Принять штраф?',
+      dispute
+          ? 'Остальные проголосуют заново: штраф останется, только если '
+              'все снова будут за.'
+          : 'Вы будете должны '
+              '${kBudgetCurrency.format.format(fine.amount)} остальным.',
+      dispute ? 'Оспорить' : 'Принять',
+    );
+    if (!sure) return;
+    await _repository.answerFine(kSharedBudgetCode, fine.id, answer);
   }
 
   /// The recipient confirms that a pending transfer arrived.
@@ -462,6 +510,11 @@ class _HomeScreenState extends State<HomeScreen> {
             titleSpacing: 24,
             actions: [
               IconButton(
+                onPressed: _openFineSheet,
+                icon: const Icon(Icons.gavel_rounded),
+                tooltip: 'Штраф',
+              ),
+              IconButton(
                 onPressed: _openHistory,
                 icon: const Icon(Icons.history_rounded),
                 tooltip: 'История',
@@ -540,16 +593,41 @@ class _HomeScreenState extends State<HomeScreen> {
                             20,
                             8,
                           ),
-                          child: SplitCard(
-                            pool: pool,
-                            currency: kBudgetCurrency,
-                            myName: widget.myName,
-                            pending: [
-                              for (final expense in expenses)
-                                if (expense.isPendingTransfer) expense,
-                            ],
-                            onPaid: _markPaid,
-                            onConfirm: _confirmReceived,
+                          // Capped and scrollable: a few fines under
+                          // vote must not push the list off the screen.
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  MediaQuery.of(context).size.height * 0.55,
+                            ),
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: [
+                                  SplitCard(
+                                    pool: pool,
+                                    currency: kBudgetCurrency,
+                                    myName: widget.myName,
+                                    pending: [
+                                      for (final expense in expenses)
+                                        if (expense.isPendingTransfer) expense,
+                                    ],
+                                    onPaid: _markPaid,
+                                    onConfirm: _confirmReceived,
+                                  ),
+                                  for (final fine in expenses)
+                                    if (fine.isFine &&
+                                        fineStatus(fine) == FineStatus.voting)
+                                      FineBanner(
+                                        fine: fine,
+                                        myName: widget.myName,
+                                        onVote: (vote) =>
+                                            _voteOnFine(fine, vote),
+                                        onAnswer: (answer) =>
+                                            _answerFine(fine, answer),
+                                      ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                         Expanded(

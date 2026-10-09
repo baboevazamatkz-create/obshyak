@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/expense.dart';
+import '../models/fines.dart';
 
 class ExpenseRepository {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
@@ -79,6 +80,28 @@ class ExpenseRepository {
     return _expensesRef(householdCode)
         .doc(expenseId)
         .update({'confirmed': true});
+  }
+
+  /// A judge's vote on a fine. Written to the one field, so two judges
+  /// voting at once never overwrite each other.
+  Future<void> voteOnFine(
+    String householdCode,
+    String fineId,
+    String judge,
+    String vote,
+  ) {
+    return _expensesRef(householdCode).doc(fineId).update({
+      FieldPath(['votes', judge]): vote
+    });
+  }
+
+  /// The offender's answer. A dispute also clears the judges' votes, so
+  /// the fine only stands if they all confirm it again.
+  Future<void> answerFine(String householdCode, String fineId, String answer) {
+    return _expensesRef(householdCode).doc(fineId).update({
+      'offenderVote': answer,
+      if (answer == kOffenderDispute) 'votes': <String, String>{},
+    });
   }
 
   /// Moves a settled period to history by stamping every one of its

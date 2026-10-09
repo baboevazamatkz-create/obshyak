@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../models/currency.dart';
 import '../models/expense.dart';
+import '../models/fines.dart';
 import '../theme.dart';
 import 'glass.dart';
 
@@ -46,32 +47,50 @@ class ExpenseTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isIncome = expense.isIncome;
     final isTransfer = expense.isTransfer;
-    final accent = expense.isPendingTransfer
+    final fine = expense.isFine ? fineStatus(expense) : null;
+    final accent = fine == FineStatus.voting || expense.isPendingTransfer
         ? kPendingColor
+        : fine == FineStatus.cancelled
+            ? accentForeground(context).withValues(alpha: 0.4)
+            : fine == FineStatus.active
+                ? expenseColor(context)
+                : isTransfer
+                    ? goldFor(context)
+                    : isIncome
+                        ? incomeColor(context)
+                        : expenseColor(context);
+    final icon = expense.isFine
+        ? Icons.gavel_rounded
         : isTransfer
-            ? goldFor(context)
+            ? Icons.swap_horiz_rounded
             : isIncome
-                ? incomeColor(context)
-                : expenseColor(context);
-    final icon = isTransfer
-        ? Icons.swap_horiz_rounded
-        : isIncome
-            ? Icons.arrow_downward_rounded
-            : Icons.shopping_basket_outlined;
-    final title = isTransfer
-        ? '${expense.author} → ${expense.recipient ?? ''}'
-        : isIncome
-            ? 'Доход'
-            : (expense.note.isNotEmpty ? expense.note : 'Покупка');
+                ? Icons.arrow_downward_rounded
+                : Icons.shopping_basket_outlined;
+    final title = expense.isFine
+        ? 'Штраф: ${expense.offender ?? ''}'
+        : isTransfer
+            ? '${expense.author} → ${expense.recipient ?? ''}'
+            : isIncome
+                ? 'Доход'
+                : (expense.note.isNotEmpty ? expense.note : 'Покупка');
     final details = [
+      if (fine != null) ...[
+        expense.note,
+        switch (fine) {
+          FineStatus.voting => 'голосование',
+          FineStatus.active => 'назначен',
+          FineStatus.cancelled => 'отменён',
+        },
+      ],
       if (isTransfer) expense.confirmed ? 'вернул долг' : 'ждёт подтверждения',
-      if (!isTransfer && expense.author.isNotEmpty) expense.author,
+      if (!isTransfer && fine == null && expense.author.isNotEmpty)
+        expense.author,
       if (isIncome && expense.note.isNotEmpty) expense.note,
       if (expense.personal > 0)
         'личное ${currency.format.format(expense.personal)}',
       if (expense.receiptId != null) 'чек',
     ].join(' · ');
-    final sign = isTransfer ? '' : (isIncome ? '+' : '−');
+    final sign = isTransfer || expense.isFine ? '' : (isIncome ? '+' : '−');
     final displayAmount = amountOverride ?? expense.amount;
     final approxPrefix = isApproximate ? '≈ ' : '';
     final ink = accentForeground(context);

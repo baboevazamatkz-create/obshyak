@@ -9,12 +9,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:expense_tracker/data/name_store.dart';
 import 'package:expense_tracker/models/currency.dart';
 import 'package:expense_tracker/models/expense.dart';
+import 'package:expense_tracker/models/fines.dart';
 import 'package:expense_tracker/models/history.dart';
 import 'package:expense_tracker/models/shared_budget.dart';
 import 'package:expense_tracker/models/shared_split.dart';
 import 'package:expense_tracker/models/transaction_type.dart';
 import 'package:expense_tracker/data/scan_service.dart';
 import 'package:expense_tracker/screens/name_picker_screen.dart';
+import 'package:expense_tracker/widgets/fine_banner.dart';
 import 'package:expense_tracker/widgets/split_card.dart';
 
 Expense _spend(String id, double amount, DateTime date) => Expense(
@@ -232,6 +234,176 @@ void main() {
       expect(periods.first.records.length, 2);
       expect(periods.first.sharedTotal, 500);
       expect(periods.last.records.single.author, 'Азамат');
+    });
+  });
+
+  group('fines', () {
+    Expense fine({
+      Map<String, String> votes = const {'Азамат': kVoteYes},
+      String? offenderVote,
+    }) =>
+        Expense(
+          id: 'fine',
+          amount: 6000,
+          date: DateTime(2026, 10, 3),
+          note: 'не помыл посуду',
+          author: 'Азамат',
+          offender: 'Имран',
+          votes: votes,
+          offenderVote: offenderVote,
+          currency: AppCurrency.kzt,
+          type: TransactionType.fine,
+        );
+
+    const allYes = {
+      'Азамат': kVoteYes,
+      'Аслан': kVoteYes,
+      'Мухаммад': kVoteYes,
+    };
+
+    test('the offender is not a judge', () {
+      expect(fineJudges(fine()), ['Азамат', 'Аслан', 'Мухаммад']);
+    });
+
+    test('a fresh proposal is being voted on and waits on everyone else', () {
+      expect(fineStatus(fine()), FineStatus.voting);
+      expect(fineAwaiting(fine()), ['Аслан', 'Мухаммад', 'Имран']);
+    });
+
+    test('all judges for and the offender accepting puts it in force', () {
+      expect(
+        fineStatus(fine(votes: allYes, offenderVote: kOffenderAccept)),
+        FineStatus.active,
+      );
+    });
+
+    test('all judges for still waits on the offender to answer', () {
+      final f = fine(votes: allYes);
+      expect(fineStatus(f), FineStatus.voting);
+      expect(fineAwaiting(f), ['Имран']);
+    });
+
+    test('a single judge against cancels it', () {
+      expect(
+        fineStatus(fine(votes: {'Азамат': kVoteYes, 'Аслан': kVoteNo})),
+        FineStatus.cancelled,
+      );
+    });
+
+    test('after a dispute, the judges confirming again overrules it', () {
+      // A dispute clears the votes; these are the second round.
+      final f = fine(votes: allYes, offenderVote: kOffenderDispute);
+      expect(fineIsDisputed(f), isTrue);
+      expect(fineStatus(f), FineStatus.active);
+    });
+
+    test('a disputed fine with votes cleared waits on all three judges', () {
+      final f = fine(votes: const {}, offenderVote: kOffenderDispute);
+      expect(fineStatus(f), FineStatus.voting);
+      expect(fineAwaiting(f), ['Азамат', 'Аслан', 'Мухаммад']);
+    });
+
+    test('a fine in force: the offender owes it, split among the others', () {
+      final pool = sharedPool([
+        fine(votes: allYes, offenderVote: kOffenderAccept),
+      ]);
+      PoolPerson p(String n) => pool.people.singleWhere((x) => x.name == n);
+      expect(p('Имран').balance, -6000);
+      expect(p('Азамат').balance, 2000);
+      expect(p('Аслан').balance, 2000);
+      expect(pool.sharedTotal, 0, reason: 'a fine is not spending');
+      expect(pool.settlements.every((s) => s.from == 'Имран'), isTrue);
+      expect(pool.settlements.length, 3);
+    });
+
+    test('a fine still being voted on changes no balance', () {
+      final pool = sharedPool([fine()]);
+      expect(pool.isSettled, isTrue);
+    });
+
+    test('a period does not close while a fine is being voted on', () {
+      expect(periodIsClosed([fine()]), isFalse);
+    });
+
+    test('a paid-off fine closes the period', () {
+      final open = [
+        fine(votes: allYes, offenderVote: kOffenderAccept),
+        for (final to in ['Азамат', 'Аслан', 'Мухаммад'])
+          Expense(
+            id: 'pay-$to',
+            amount: 2000,
+            date: DateTime(2026, 10, 4),
+            author: 'Имран',
+            recipient: to,
+            currency: AppCurrency.kzt,
+            type: TransactionType.transfer,
+          ),
+      ];
+      expect(periodIsClosed(open), isTrue);
+    });
+
+    test('fine fields survive storage', () {
+      final restored = Expense.fromJson(
+        fine(votes: allYes, offenderVote: kOffenderDispute).toJson(),
+      );
+      expect(restored.isFine, isTrue);
+      expect(restored.offender, 'Имран');
+      expect(restored.votes, allYes);
+      expect(restored.offenderVote, kOffenderDispute);
+    });
+
+    Future<void> pumpBanner(
+      WidgetTester tester,
+      Expense f,
+      String me, {
+      ValueChanged<String>? onVote,
+      ValueChanged<String>? onAnswer,
+    }) {
+      return tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: FineBanner(
+            fine: f,
+            myName: me,
+            onVote: onVote ?? (_) {},
+            onAnswer: onAnswer ?? (_) {},
+          ),
+        ),
+      ));
+    }
+
+    testWidgets('the offender is asked to accept or dispute', (tester) async {
+      String? answer;
+      await pumpBanner(tester, fine(), 'Имран', onAnswer: (a) => answer = a);
+      expect(find.text('Принять'), findsOneWidget);
+      await tester.tap(find.text('Оспорить'));
+      expect(answer, kOffenderDispute);
+    });
+
+    testWidgets('a judge who has not voted is asked to set or cancel',
+        (tester) async {
+      String? vote;
+      await pumpBanner(tester, fine(), 'Аслан', onVote: (v) => vote = v);
+      await tester.tap(find.text('Назначить'));
+      expect(vote, kVoteYes);
+    });
+
+    testWidgets('the proposer, having voted, only sees who it waits on',
+        (tester) async {
+      await pumpBanner(tester, fine(), 'Азамат');
+      expect(find.text('Назначить'), findsNothing);
+      expect(find.text('Ждём: Аслан, Мухаммад, Имран'), findsOneWidget);
+    });
+
+    testWidgets('after a dispute the judges are told to confirm again',
+        (tester) async {
+      await pumpBanner(
+        tester,
+        fine(votes: const {}, offenderVote: kOffenderDispute),
+        'Аслан',
+      );
+      expect(
+          find.text('Имран оспорил. Нужно подтвердить заново'), findsOneWidget);
+      expect(find.text('Назначить'), findsOneWidget);
     });
   });
 

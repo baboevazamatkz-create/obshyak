@@ -1,7 +1,8 @@
 /// [income] is only read back from records made before the flat stopped
 /// recording income; nothing creates it any more. [transfer] is one flatmate
-/// paying another back.
-enum TransactionType { expense, income, transfer }
+/// paying another back. [fine] is a penalty one flatmate owes the other
+/// three, once the flat has voted it through.
+enum TransactionType { expense, income, transfer, fine }
 
 extension TransactionTypeX on TransactionType {
   String get storageKey => name;

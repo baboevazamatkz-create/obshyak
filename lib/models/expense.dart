@@ -39,6 +39,15 @@ class Expense {
   /// read as confirmed.
   final bool confirmed;
 
+  /// Fine only: who is being fined. The author is who proposed it.
+  final String? offender;
+
+  /// Fine only: each judge's vote, keyed by name -- see `fines.dart`.
+  final Map<String, String> votes;
+
+  /// Fine only: the offender's answer, null until they give one.
+  final String? offenderVote;
+
   const Expense({
     required this.id,
     required this.amount,
@@ -53,11 +62,15 @@ class Expense {
     this.recipient,
     this.archivedAt,
     this.confirmed = true,
+    this.offender,
+    this.votes = const {},
+    this.offenderVote,
   });
 
   bool get isIncome => type == TransactionType.income;
   bool get isTransfer => type == TransactionType.transfer;
   bool get isPendingTransfer => isTransfer && !confirmed;
+  bool get isFine => type == TransactionType.fine;
 
   /// What goes into the flat's split: the receipt minus the personal part.
   double get sharedAmount {
@@ -79,6 +92,9 @@ class Expense {
         recipient: recipient,
         archivedAt: archivedAt,
         confirmed: confirmed,
+        offender: offender,
+        votes: votes,
+        offenderVote: offenderVote,
       );
 
   Map<String, dynamic> toJson() => {
@@ -96,6 +112,9 @@ class Expense {
         'archivedAt':
             archivedAt == null ? null : Timestamp.fromDate(archivedAt!),
         'confirmed': confirmed,
+        'offender': offender,
+        'votes': votes,
+        'offenderVote': offenderVote,
       };
 
   factory Expense.fromJson(Map<String, dynamic> json) => Expense(
@@ -114,5 +133,11 @@ class Expense {
         recipient: json['recipient'] as String?,
         archivedAt: (json['archivedAt'] as Timestamp?)?.toDate(),
         confirmed: json['confirmed'] as bool? ?? true,
+        offender: json['offender'] as String?,
+        votes: (json['votes'] as Map?)?.map(
+              (key, value) => MapEntry(key as String, value as String),
+            ) ??
+            const {},
+        offenderVote: json['offenderVote'] as String?,
       );
 }

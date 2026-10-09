@@ -1,4 +1,5 @@
 import 'expense.dart';
+import 'fines.dart';
 import 'shared_budget.dart';
 
 /// One flatmate's standing in the flat's shared spending.
@@ -74,11 +75,25 @@ const double kSettledThreshold = 1;
 SharedPool sharedPool(List<Expense> expenses) {
   final paid = {for (final name in kRoommates) name: 0.0};
   final sent = {for (final name in kRoommates) name: 0.0};
+  final fined = {for (final name in kRoommates) name: 0.0};
   final received = {for (final name in kRoommates) name: 0.0};
   var sharedTotal = 0.0;
 
   for (final expense in expenses) {
-    if (expense.isTransfer) {
+    if (expense.isFine) {
+      // A fine in force is a debt from the offender to the other three,
+      // shared equally between them. It is not spending.
+      final offender = expense.offender;
+      if (fineStatus(expense) != FineStatus.active ||
+          !fined.containsKey(offender)) {
+        continue;
+      }
+      final judges = fineJudges(expense);
+      fined[offender!] = fined[offender]! - expense.amount;
+      for (final judge in judges) {
+        fined[judge] = fined[judge]! + expense.amount / judges.length;
+      }
+    } else if (expense.isTransfer) {
       // Not money until the recipient says it arrived.
       if (!expense.confirmed) continue;
       final to = expense.recipient;
@@ -103,7 +118,8 @@ SharedPool sharedPool(List<Expense> expenses) {
         paid: paid[name]!,
         sent: sent[name]!,
         received: received[name]!,
-        balance: paid[name]! - fair + sent[name]! - received[name]!,
+        balance:
+            paid[name]! - fair + sent[name]! - received[name]! + fined[name]!,
       ),
   ];
 
@@ -157,8 +173,13 @@ class _Open {
 }
 
 /// Whether the open period has been settled in full and should move to
-/// history: something was bought for the flat, and nobody owes anybody.
+/// history: something was bought or fined, nobody owes anybody, and no
+/// fine is still being voted on.
 bool periodIsClosed(List<Expense> open) {
+  final fines = open.where((e) => e.isFine);
+  if (fines.any((f) => fineStatus(f) == FineStatus.voting)) return false;
   final pool = sharedPool(open);
-  return pool.sharedTotal > 0 && pool.isSettled;
+  final anythingHappened = pool.sharedTotal > 0 ||
+      fines.any((f) => fineStatus(f) == FineStatus.active);
+  return anythingHappened && pool.isSettled;
 }
