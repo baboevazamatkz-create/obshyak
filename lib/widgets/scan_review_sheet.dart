@@ -61,11 +61,6 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
     }
   }
 
-  /// Rows being edited in place. Opened from a row's menu, not from a
-  /// separate form, so every field is one tap away while the rest of the
-  /// receipt stays on screen.
-  final Set<int> _open = {};
-
   bool get _allSelected => _selected.length == _rows.length;
 
   /// A selected row whose personal part is larger than its amount, or a
@@ -89,23 +84,6 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
   void _toggle(int index) {
     setState(() {
       if (!_selected.remove(index)) _selected.add(index);
-    });
-  }
-
-  void _flipType(int index) {
-    final row = _rows[index];
-    setState(() {
-      _rows[index] = row.copyWith(
-        type: row.type == TransactionType.expense
-            ? TransactionType.income
-            : TransactionType.expense,
-      );
-    });
-  }
-
-  void _toggleOpen(int index) {
-    setState(() {
-      if (!_open.remove(index)) _open.add(index);
     });
   }
 
@@ -236,11 +214,8 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
                     currency: widget.currency,
                     selected: _selected.contains(index),
                     duplicate: widget.duplicates.contains(index),
-                    open: _open.contains(index),
                     invalid: _rowInvalid(_rows[index]),
                     onToggle: () => _toggle(index),
-                    onFlipType: () => _flipType(index),
-                    onToggleOpen: () => _toggleOpen(index),
                     onChanged: (row) => _update(index, row),
                   ),
                 ),
@@ -298,11 +273,8 @@ class _ScanRow extends StatelessWidget {
   final AppCurrency currency;
   final bool selected;
   final bool duplicate;
-  final bool open;
   final bool invalid;
   final VoidCallback onToggle;
-  final VoidCallback onFlipType;
-  final VoidCallback onToggleOpen;
   final ValueChanged<ScannedTransaction> onChanged;
 
   const _ScanRow({
@@ -311,11 +283,8 @@ class _ScanRow extends StatelessWidget {
     required this.currency,
     required this.selected,
     required this.duplicate,
-    required this.open,
     required this.invalid,
     required this.onToggle,
-    required this.onFlipType,
-    required this.onToggleOpen,
     required this.onChanged,
   });
 
@@ -325,15 +294,16 @@ class _ScanRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildRow(context),
-        if (open)
-          Padding(
-            padding: const EdgeInsets.only(top: 6, left: 6, right: 6),
-            child: _RowEditor(
-              row: row,
-              currency: currency,
-              onChanged: onChanged,
-            ),
+        // Always open: every field of the record is in front of the user,
+        // so a personal part, a name or a date is set right here.
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: _RowEditor(
+            row: row,
+            currency: currency,
+            onChanged: onChanged,
           ),
+        ),
       ],
     );
   }
@@ -430,32 +400,6 @@ class _ScanRow extends StatelessWidget {
                           ? incomeColor(context)
                           : ink,
                 ),
-              ),
-              PopupMenuButton<_RowAction>(
-                tooltip: 'Что сделать с записью',
-                icon: Icon(
-                  Icons.more_vert_rounded,
-                  size: 18,
-                  color: ink.withValues(alpha: 0.6),
-                ),
-                onSelected: (action) {
-                  switch (action) {
-                    case _RowAction.edit:
-                      onToggleOpen();
-                    case _RowAction.flip:
-                      onFlipType();
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: _RowAction.edit,
-                    child: Text(open ? 'Свернуть' : 'Изменить'),
-                  ),
-                  PopupMenuItem(
-                    value: _RowAction.flip,
-                    child: Text(isIncome ? 'Это расход' : 'Это доход'),
-                  ),
-                ],
               ),
             ],
           ),
@@ -568,7 +512,7 @@ class _RowEditorState extends State<_RowEditor> {
           TextField(
             controller: _note,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Комментарий'),
+            decoration: const InputDecoration(labelText: 'Название траты'),
             onChanged: (_) => _push(row),
           ),
           const SizedBox(height: 8),
@@ -611,5 +555,3 @@ class _RowEditorState extends State<_RowEditor> {
     ));
   }
 }
-
-enum _RowAction { edit, flip }

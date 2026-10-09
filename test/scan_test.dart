@@ -622,8 +622,9 @@ void main() {
         onConfirm: (_) {},
       );
 
-      expect(find.text('Магнит'), findsOneWidget);
-      expect(find.text('Зарплата'), findsOneWidget);
+      // The title and the editable name both show it.
+      expect(find.text('Магнит'), findsWidgets);
+      expect(find.text('Зарплата'), findsWidgets);
       expect(find.text('ВЫБРАНО 2 ИЗ 2'), findsOneWidget);
       expect(find.text('Добавить 2 записи'), findsOneWidget);
     });
@@ -658,36 +659,13 @@ void main() {
         onConfirm: (expenses) => confirmed = expenses,
       );
 
-      await tester.tap(find.text('Магнит'));
+      await tester.tap(find.text('Магнит').first);
       await tester.pumpAndSettle();
       expect(find.text('ВЫБРАНО 2 ИЗ 2'), findsOneWidget);
 
       await tester.tap(find.text('Добавить 2 записи'));
       await tester.pumpAndSettle();
       expect(confirmed, hasLength(2));
-    });
-
-    testWidgets('a misread direction can be flipped on the row itself',
-        (tester) async {
-      List<Expense>? confirmed;
-      await _pumpSheet(
-        tester,
-        result: parsed(),
-        duplicates: const {},
-        onConfirm: (expenses) => confirmed = expenses,
-      );
-
-      await tester.tap(find.byIcon(Icons.more_vert_rounded).first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Это доход'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Добавить 2 записи'));
-      await tester.pumpAndSettle();
-
-      expect(confirmed!.first.type, TransactionType.income);
-      // Income carries no category: the home screen groups it on its own.
-      expect(confirmed!.first.category, isNull);
     });
 
     testWidgets('a row opens in place and its personal part reaches the record',
@@ -700,18 +678,16 @@ void main() {
         onConfirm: (expenses) => confirmed = expenses,
       );
 
-      await tester.tap(find.byIcon(Icons.more_vert_rounded).first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Изменить'));
-      await tester.pumpAndSettle();
-
-      // The fields sit under the row: no separate form opens.
-      expect(find.text('Лично, не в общак'), findsOneWidget);
-      expect(find.text('ИЗМЕНИТЬ РАСХОД'), findsNothing);
+      // The fields are always open under each row: no menu, no form.
+      expect(find.text('Лично, не в общак'), findsWidgets);
+      expect(find.byIcon(Icons.more_vert_rounded), findsNothing);
+      expect(find.text('Изменить'), findsNothing);
+      expect(find.text('Это доход'), findsNothing);
 
       // The editor's fields in order: amount, personal part, note.
       final amountField = find.byType(TextField).at(0);
-      final personalField = find.widgetWithText(TextField, 'Лично, не в общак');
+      final personalField =
+          find.widgetWithText(TextField, 'Лично, не в общак').first;
       await tester.enterText(amountField, '2000');
       await tester.enterText(personalField, '500');
       await tester.pumpAndSettle();
@@ -732,12 +708,8 @@ void main() {
         onConfirm: (_) => fail('an invalid personal part must not save'),
       );
 
-      await tester.tap(find.byIcon(Icons.more_vert_rounded).first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Изменить'));
-      await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextField, 'Лично, не в общак'),
+        find.widgetWithText(TextField, 'Лично, не в общак').first,
         '99999999',
       );
       await tester.pumpAndSettle();
