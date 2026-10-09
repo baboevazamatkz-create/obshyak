@@ -569,7 +569,7 @@ void main() {
     testWidgets('a pending transfer waits, yellow, on the payer\'s phone',
         (tester) async {
       await pump(tester, me: 'Аслан', pending: [sent]);
-      expect(find.text('ждёт подтверждения'), findsOneWidget);
+      expect(find.text('ожидает'), findsOneWidget);
       expect(find.text('Оплатить'), findsNothing);
     });
 

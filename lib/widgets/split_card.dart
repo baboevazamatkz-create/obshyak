@@ -179,7 +179,7 @@ class SplitCard extends StatelessWidget {
         onPressed: () => onConfirm(waiting),
       );
     }
-    return const _Status('ждёт подтверждения', kPendingColor, filled: true);
+    return const _Status('ожидает', kPendingColor, filled: true);
   }
 
   String _signed(double balance) {

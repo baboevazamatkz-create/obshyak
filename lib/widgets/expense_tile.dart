@@ -82,7 +82,7 @@ class ExpenseTile extends StatelessWidget {
           FineStatus.cancelled => 'отменён',
         },
       ],
-      if (isTransfer) expense.confirmed ? 'вернул долг' : 'ждёт подтверждения',
+      if (isTransfer) expense.confirmed ? 'вернул долг' : 'ожидает',
       if (!isTransfer && fine == null && expense.author.isNotEmpty)
         expense.author,
       if (isIncome && expense.note.isNotEmpty) expense.note,
