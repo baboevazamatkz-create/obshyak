@@ -7,7 +7,6 @@ import '../models/expense_category.dart';
 import '../models/scanned_transaction.dart';
 import '../models/transaction_type.dart';
 import '../theme.dart';
-import 'add_expense_sheet.dart';
 
 final _rowDate = DateFormat('d MMM', 'ru');
 
@@ -62,7 +61,20 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
     }
   }
 
+  /// Rows being edited in place. Opened from a row's menu, not from a
+  /// separate form, so every field is one tap away while the rest of the
+  /// receipt stays on screen.
+  final Set<int> _open = {};
+
   bool get _allSelected => _selected.length == _rows.length;
+
+  /// A selected row whose personal part is larger than its amount, or a
+  /// negative amount, cannot be written down as it stands.
+  bool _rowInvalid(ScannedTransaction row) =>
+      row.amount <= 0 || row.personal < 0 || row.personal > row.amount;
+
+  bool get _canConfirm =>
+      _selected.isNotEmpty && _selected.every((i) => !_rowInvalid(_rows[i]));
 
   void _toggleAll() {
     setState(() {
@@ -91,48 +103,23 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
     });
   }
 
-  Future<void> _edit(int index) async {
-    final row = _rows[index];
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: sheetSurface(context),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-          ),
-          // The ordinary editor, handed the scanned row as if it were an
-          // existing record: one form to maintain instead of two, and the
-          // corrections a user makes here look exactly like the ones they
-          // make on the home screen.
-          child: AddExpenseSheet(
-            type: row.type,
-            currency: widget.currency,
-            existing: row.toExpense(householdCurrency: widget.currency),
-            onSubmit: (edited) {
-              setState(() {
-                _rows[index] = row.copyWith(
-                  amount: edited.amount,
-                  category: edited.category ?? row.category,
-                  note: edited.note,
-                  date: edited.date,
-                  personal: edited.personal,
-                );
-                _selected.add(index);
-              });
-            },
-          ),
-        ),
-      ),
-    );
+  void _toggleOpen(int index) {
+    setState(() {
+      if (!_open.remove(index)) _open.add(index);
+    });
+  }
+
+  /// Writes an edit straight into the row and ticks it, since a row that
+  /// is being corrected is one the user means to keep.
+  void _update(int index, ScannedTransaction row) {
+    setState(() {
+      _rows[index] = row;
+      _selected.add(index);
+    });
   }
 
   void _confirm() {
+    if (!_canConfirm) return;
     final chosen = [
       for (var i = 0; i < _rows.length; i++)
         if (_selected.contains(i))
@@ -244,13 +231,17 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
                   itemCount: _rows.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, index) => _ScanRow(
+                    key: ValueKey(index),
                     row: _rows[index],
                     currency: widget.currency,
                     selected: _selected.contains(index),
                     duplicate: widget.duplicates.contains(index),
+                    open: _open.contains(index),
+                    invalid: _rowInvalid(_rows[index]),
                     onToggle: () => _toggle(index),
                     onFlipType: () => _flipType(index),
-                    onEdit: () => _edit(index),
+                    onToggleOpen: () => _toggleOpen(index),
+                    onChanged: (row) => _update(index, row),
                   ),
                 ),
               ),
@@ -268,7 +259,7 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
-                      onPressed: _selected.isEmpty ? null : _confirm,
+                      onPressed: _canConfirm ? _confirm : null,
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(_selected.length == 1
@@ -307,22 +298,47 @@ class _ScanRow extends StatelessWidget {
   final AppCurrency currency;
   final bool selected;
   final bool duplicate;
+  final bool open;
+  final bool invalid;
   final VoidCallback onToggle;
   final VoidCallback onFlipType;
-  final VoidCallback onEdit;
+  final VoidCallback onToggleOpen;
+  final ValueChanged<ScannedTransaction> onChanged;
 
   const _ScanRow({
+    super.key,
     required this.row,
     required this.currency,
     required this.selected,
     required this.duplicate,
+    required this.open,
+    required this.invalid,
     required this.onToggle,
     required this.onFlipType,
-    required this.onEdit,
+    required this.onToggleOpen,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildRow(context),
+        if (open)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 6, right: 6),
+            child: _RowEditor(
+              row: row,
+              currency: currency,
+              onChanged: onChanged,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRow(BuildContext context) {
     final isIncome = row.type == TransactionType.income;
     final tint = isIncome ? incomeColor(context) : row.category.color;
     final ink = accentForeground(context);
@@ -335,6 +351,8 @@ class _ScanRow extends StatelessWidget {
       if (!isIncome) row.category.label,
       if (duplicate) 'похоже, уже есть',
       if (row.isUncertain) 'проверьте сумму',
+      if (row.personal > 0) 'лично ${currency.format.format(row.personal)}',
+      if (invalid) 'проверьте сумму',
     ].join(' · ');
 
     return InkWell(
@@ -406,7 +424,11 @@ class _ScanRow extends StatelessWidget {
                 style: moneyStyle(
                   size: 14,
                   weight: FontWeight.w500,
-                  color: isIncome ? incomeColor(context) : ink,
+                  color: invalid
+                      ? goldFor(context)
+                      : isIncome
+                          ? incomeColor(context)
+                          : ink,
                 ),
               ),
               PopupMenuButton<_RowAction>(
@@ -419,15 +441,15 @@ class _ScanRow extends StatelessWidget {
                 onSelected: (action) {
                   switch (action) {
                     case _RowAction.edit:
-                      onEdit();
+                      onToggleOpen();
                     case _RowAction.flip:
                       onFlipType();
                   }
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: _RowAction.edit,
-                    child: Text('Изменить'),
+                    child: Text(open ? 'Свернуть' : 'Изменить'),
                   ),
                   PopupMenuItem(
                     value: _RowAction.flip,
@@ -440,6 +462,153 @@ class _ScanRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// The fields of a scanned row, edited where it sits in the sheet: amount,
+/// the part that was for the person alone (kept out of the flat's split),
+/// the note and the date. Every change goes straight back into the row.
+class _RowEditor extends StatefulWidget {
+  final ScannedTransaction row;
+  final AppCurrency currency;
+  final ValueChanged<ScannedTransaction> onChanged;
+
+  const _RowEditor({
+    required this.row,
+    required this.currency,
+    required this.onChanged,
+  });
+
+  @override
+  State<_RowEditor> createState() => _RowEditorState();
+}
+
+class _RowEditorState extends State<_RowEditor> {
+  late final TextEditingController _amount = TextEditingController(
+    text: _formatAmount(widget.row.amount),
+  );
+  late final TextEditingController _personal = TextEditingController(
+    text: widget.row.personal > 0 ? _formatAmount(widget.row.personal) : '',
+  );
+  late final TextEditingController _note = TextEditingController(
+    text: widget.row.note,
+  );
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _personal.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  static String _formatAmount(double value) => value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toString();
+
+  /// Accepts the spaces and commas people type into a sum: "12 500,5".
+  static double? _parse(String text) => double.tryParse(
+        text.replaceAll(' ', '').replaceAll(',', '.').trim(),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final row = widget.row;
+    final ink = accentForeground(context);
+    final amount = _parse(_amount.text);
+    final personal =
+        _personal.text.trim().isEmpty ? 0.0 : _parse(_personal.text);
+    final personalError = personal == null
+        ? 'Введите сумму'
+        : (amount != null && personal > amount)
+            ? 'Не больше суммы чека'
+            : null;
+    final amountError = amount == null || amount <= 0 ? 'Введите сумму' : null;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: sheetSurface(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: hairlineColor(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _amount,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Сумма, ${widget.currency.symbol}',
+                    errorText: amountError,
+                  ),
+                  onChanged: (_) => _push(row),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _personal,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Лично, не в общак',
+                    errorText: personalError,
+                  ),
+                  onChanged: (_) => _push(row),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _note,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Комментарий'),
+            onChanged: (_) => _push(row),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.calendar_today_rounded, size: 16, color: ink),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: row.date,
+                    firstDate: DateTime(DateTime.now().year - 5),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked == null || !context.mounted) return;
+                  widget.onChanged(row.copyWith(date: picked));
+                },
+                child: Text(_rowDate.format(row.date)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Passes the fields on as they stand, read from the boxes at the moment
+  /// of the change. A field that does not read as a sum yet keeps the row's
+  /// last good value underneath, so the row never holds nonsense; the error
+  /// text says what is missing.
+  void _push(ScannedTransaction row) {
+    final amount = _parse(_amount.text);
+    final personal =
+        _personal.text.trim().isEmpty ? 0.0 : _parse(_personal.text);
+    widget.onChanged(row.copyWith(
+      amount: amount ?? row.amount,
+      personal: personal ?? row.personal,
+      note: _note.text.trim(),
+    ));
   }
 }
 

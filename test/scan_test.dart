@@ -690,7 +690,7 @@ void main() {
       expect(confirmed!.first.category, isNull);
     });
 
-    testWidgets('a row can be corrected in the ordinary editor',
+    testWidgets('a row opens in place and its personal part reaches the record',
         (tester) async {
       List<Expense>? confirmed;
       await _pumpSheet(
@@ -705,14 +705,48 @@ void main() {
       await tester.tap(find.text('Изменить'));
       await tester.pumpAndSettle();
 
-      expect(find.text('ИЗМЕНИТЬ РАСХОД'), findsOneWidget);
-      await tester.enterText(find.byType(TextField).first, '2000');
-      await tester.tap(find.text('Сохранить'));
-      await tester.pumpAndSettle();
+      // The fields sit under the row: no separate form opens.
+      expect(find.text('Лично, не в общак'), findsOneWidget);
+      expect(find.text('ИЗМЕНИТЬ РАСХОД'), findsNothing);
 
+      // The editor's fields in order: amount, personal part, note.
+      final amountField = find.byType(TextField).at(0);
+      final personalField = find.widgetWithText(TextField, 'Лично, не в общак');
+      await tester.enterText(amountField, '2000');
+      await tester.enterText(personalField, '500');
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Добавить 2 записи'));
       await tester.pumpAndSettle();
+
       expect(confirmed!.first.amount, 2000);
+      expect(confirmed!.first.personal, 500);
+      expect(confirmed!.first.sharedAmount, 1500);
+    });
+
+    testWidgets('a personal part above the amount cannot be added',
+        (tester) async {
+      await _pumpSheet(
+        tester,
+        result: parsed(),
+        duplicates: const {},
+        onConfirm: (_) => fail('an invalid personal part must not save'),
+      );
+
+      await tester.tap(find.byIcon(Icons.more_vert_rounded).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Изменить'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Лично, не в общак'),
+        '99999999',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Не больше суммы чека'), findsOneWidget);
+      final button = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Добавить 2 записи'),
+      );
+      expect(button.onPressed, isNull);
     });
 
     testWidgets('nothing found says so and offers only a way out',
