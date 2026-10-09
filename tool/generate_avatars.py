@@ -64,7 +64,7 @@ PEOPLE = [
     # file, background, hair, face width, beard, glasses
     ('azamat', (196, 160, 92, 255), BLACK_HAIR, 1.0, 'long', False),
     ('aslan', (74, 150, 140, 255), BLACK_HAIR, 0.78, 'short', False),
-    ('muhammad', (132, 102, 176, 255), BROWN_HAIR, 1.0, 'medium', True),
+    ('muhammad', (196, 176, 240, 255), BROWN_HAIR, 1.0, 'medium', True),
     ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, None, True),
 ]
 
