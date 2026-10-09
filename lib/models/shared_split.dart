@@ -101,67 +101,81 @@ class SharedPool {
 /// four leaves fractions of a tenge nobody is going to transfer.
 const double kSettledThreshold = 1;
 
+/// Splits [amount] into [parts] whole-tenge shares that add up to the
+/// amount rounded to the tenge: 5 000 in three is 1 667, 1 667, 1 666.
+///
+/// Splitting into fractions instead left a debt of 1 666.67 shown as 1 667;
+/// paying that left a third of a tenge the other way, and balances drifted
+/// off the transfers by a tenge or two.
+List<double> splitEvenly(double amount, int parts) => [
+      for (var i = 0; i < parts; i++)
+        (amount * (i + 1) / parts).roundToDouble() -
+            (amount * i / parts).roundToDouble(),
+    ];
+
 /// Pure, so the rule can be tested without a Firestore stream behind it.
+///
+/// Everything is worked out as who owes whom, and the balances are read off
+/// those same debts, so a balance always equals what the listed transfers
+/// would move.
 SharedPool sharedPool(List<Expense> expenses) {
   final paid = {for (final name in kRoommates) name: 0.0};
   final sent = {for (final name in kRoommates) name: 0.0};
-  final fined = {for (final name in kRoommates) name: 0.0};
+  final received = {for (final name in kRoommates) name: 0.0};
   // owes[a][b]: what a still owes b. Never netted against owes[b][a].
   final owes = {
     for (final a in kRoommates) a: {for (final b in kRoommates) b: 0.0},
   };
-  final received = {for (final name in kRoommates) name: 0.0};
   var sharedTotal = 0.0;
 
+  void owe(String from, String to, double amount) =>
+      owes[from]![to] = owes[from]![to]! + amount;
+
   for (final expense in expenses) {
+    final author = expense.author;
+    final to = expense.recipient;
     if (expense.isOffset) {
       // Both debts go down by the same amount; nobody's balance moves.
-      final to = expense.recipient;
-      if (owes.containsKey(expense.author) && owes.containsKey(to)) {
-        owes[expense.author]![to!] =
-            owes[expense.author]![to]! - expense.amount;
-        owes[to]![expense.author] = owes[to]![expense.author]! - expense.amount;
-      }
+      if (!owes.containsKey(author) || !owes.containsKey(to)) continue;
+      owe(author, to!, -expense.amount);
+      owe(to, author, -expense.amount);
     } else if (expense.isFine) {
-      // A fine in force is a debt from the offender to the other three,
+      // A fine in force is a debt from the offender to everyone else,
       // shared equally between them. It is not spending.
       final offender = expense.offender;
       if (fineStatus(expense) != FineStatus.active ||
-          !fined.containsKey(offender)) {
+          !owes.containsKey(offender)) {
         continue;
       }
       final judges = fineJudges(expense);
-      final share = expense.amount / judges.length;
-      fined[offender!] = fined[offender]! - expense.amount;
-      for (final judge in judges) {
-        fined[judge] = fined[judge]! + share;
-        owes[offender]![judge] = owes[offender]![judge]! + share;
+      final shares = splitEvenly(expense.amount, judges.length);
+      for (var i = 0; i < judges.length; i++) {
+        owe(offender!, judges[i], shares[i]);
       }
     } else if (expense.isTransfer) {
       // Not money until the recipient says it arrived.
       if (!expense.confirmed) continue;
-      final to = expense.recipient;
-      if (sent.containsKey(expense.author) && received.containsKey(to)) {
-        sent[expense.author] = sent[expense.author]! + expense.amount;
-        received[to!] = received[to]! + expense.amount;
-        owes[expense.author]![to] = owes[expense.author]![to]! - expense.amount;
-      }
+      if (!owes.containsKey(author) || !owes.containsKey(to)) continue;
+      sent[author] = sent[author]! + expense.amount;
+      received[to!] = received[to]! + expense.amount;
+      owe(author, to, -expense.amount);
     } else if (!expense.isIncome) {
       // A purchase only counts once we know who paid for it; an anonymous
       // one could not be balanced against anybody.
-      if (!paid.containsKey(expense.author)) continue;
-      paid[expense.author] = paid[expense.author]! + expense.sharedAmount;
-      sharedTotal += expense.sharedAmount;
+      if (!paid.containsKey(author)) continue;
+      final shared = expense.sharedAmount;
+      paid[author] = paid[author]! + shared;
+      sharedTotal += shared;
       // Everyone else owes the buyer their quarter of it.
-      final quarter = expense.sharedAmount / kRoommateCount;
-      for (final other in kRoommates) {
-        if (other == expense.author) continue;
-        owes[other]![expense.author] = owes[other]![expense.author]! + quarter;
+      final shares = splitEvenly(shared, kRoommateCount);
+      for (var i = 0; i < kRoommates.length; i++) {
+        if (kRoommates[i] != author) owe(kRoommates[i], author, shares[i]);
       }
     }
   }
 
-  final fair = sharedTotal / kRoommateCount;
+  _carryOverpayments(owes);
+
   final people = [
     for (final name in kRoommates)
       PoolPerson(
@@ -169,8 +183,10 @@ SharedPool sharedPool(List<Expense> expenses) {
         paid: paid[name]!,
         sent: sent[name]!,
         received: received[name]!,
-        balance:
-            paid[name]! - fair + sent[name]! - received[name]! + fined[name]!,
+        balance: [
+          for (final other in kRoommates)
+            owes[other]![name]! - owes[name]![other]!,
+        ].fold(0.0, (sum, x) => sum + x),
       ),
   ];
 
@@ -180,6 +196,26 @@ SharedPool sharedPool(List<Expense> expenses) {
     settlements: _settle(owes),
     offsets: _offsets(owes),
   );
+}
+
+/// A debt paid down past zero means the payer handed over too much: the
+/// excess is now owed back to them, so it moves to the other direction
+/// instead of sitting as a negative debt nobody is asked to settle.
+void _carryOverpayments(Map<String, Map<String, double>> owes) {
+  for (var i = 0; i < kRoommates.length; i++) {
+    for (var j = i + 1; j < kRoommates.length; j++) {
+      final a = kRoommates[i];
+      final b = kRoommates[j];
+      if (owes[a]![b]! < 0) {
+        owes[b]![a] = owes[b]![a]! - owes[a]![b]!;
+        owes[a]![b] = 0;
+      }
+      if (owes[b]![a]! < 0) {
+        owes[a]![b] = owes[a]![b]! - owes[b]![a]!;
+        owes[b]![a] = 0;
+      }
+    }
+  }
 }
 
 /// Every debt one flatmate still owes another, each on its own.
@@ -193,9 +229,9 @@ List<Settlement> _settle(Map<String, Map<String, double>> owes) {
   for (final from in kRoommates) {
     for (final to in kRoommates) {
       if (from == to) continue;
-      final amount = owes[from]![to]!.roundToDouble();
-      if (amount < kSettledThreshold) continue;
-      result.add(Settlement(from: from, to: to, amount: amount));
+      final owed = owes[from]![to]!;
+      if (owed < kSettledThreshold) continue;
+      result.add(Settlement(from: from, to: to, amount: owed.roundToDouble()));
     }
   }
   return result;
@@ -211,8 +247,9 @@ List<Offset> _offsets(Map<String, Map<String, double>> owes) {
       final b = kRoommates[j];
       final ab = owes[a]![b]!;
       final ba = owes[b]![a]!;
-      final common = (ab < ba ? ab : ba).roundToDouble();
-      if (common < kSettledThreshold) continue;
+      final smaller = ab < ba ? ab : ba;
+      if (smaller < kSettledThreshold) continue;
+      final common = smaller.roundToDouble();
       final left = (ab - ba).abs().roundToDouble();
       result.add(Offset(
         a: a,
