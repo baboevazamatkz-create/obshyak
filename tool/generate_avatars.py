@@ -18,7 +18,6 @@ Requires Pillow.
 """
 import argparse
 import os
-import random
 
 from PIL import Image, ImageChops, ImageDraw
 
@@ -36,18 +35,37 @@ MOUTH = (120, 48, 44, 255)
 FRAME = (28, 28, 36, 255)
 CHEEK = (236, 140, 130, 90)
 
-# Every face is drawn at the same size and height, sized so the longest
-# beard still ends inside the disc. Only the face's width differs, where
-# the description asks for a slimmer face.
+# Every face is drawn at the same size, small enough for the longest beard
+# to end inside the disc. Only the face's width differs, where the
+# description asks for a slimmer face.
 FACE_SIZE = 0.88
-FACE_CENTRE = 0.45
+
+# How far each beard hangs below the chin, as (top, extra depth past the
+# face's own half-height in units of S). Shared by the drawing and by the
+# centring, so the two never disagree.
+BEARD_SHAPE = {
+    'long': (0.16, 0.16),
+    'medium': (0.18, 0.035),
+}
+
+
+def centred(beard, size=FACE_SIZE):
+    """The face centre (as a share of S) that puts the whole head -- top
+    of the hair to the end of the beard -- in the middle of the disc."""
+    ry = 0.34 * size
+    top = 1.13 * ry
+    bottom = ry
+    if beard in BEARD_SHAPE:
+        start, extra = BEARD_SHAPE[beard]
+        bottom = start * ry + ry + extra
+    return 0.5 - (bottom - top) / 2
 
 PEOPLE = [
     # file, background, hair, face width, beard, glasses
     ('azamat', (196, 160, 92, 255), BLACK_HAIR, 1.0, 'long', False),
     ('aslan', (74, 150, 140, 255), BLACK_HAIR, 0.78, 'short', False),
     ('muhammad', (132, 102, 176, 255), BROWN_HAIR, 1.0, 'medium', True),
-    ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, 'sparse', True),
+    ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, None, True),
 ]
 
 # How much of the hair colour shows through each beard. Stubble is the same
@@ -62,8 +80,8 @@ def ellipse(draw, cx, cy, rx, ry, **kw):
     draw.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), **kw)
 
 
-def face(background, hair, width, beard, glasses,
-         size=FACE_SIZE, centre=FACE_CENTRE):
+def face(background, hair, width, beard, glasses, size=FACE_SIZE):
+    centre = centred(beard, size)
     image = Image.new('RGBA', (S, S), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     cx, cy = S / 2, S * centre
@@ -85,10 +103,11 @@ def face(background, hair, width, beard, glasses,
     eye_y = cy - ry * 0.06
     eye_dx = rx * 0.40
 
-    if beard and beard != 'sparse':
+    if beard:
         top, depth = {
-            'long': (0.16, ry + S * 0.16),
-            'medium': (0.18, ry + S * 0.035),
+            'long': (BEARD_SHAPE['long'][0], ry + S * BEARD_SHAPE['long'][1]),
+            'medium': (BEARD_SHAPE['medium'][0],
+                       ry + S * BEARD_SHAPE['medium'][1]),
             'short': (0.30, ry * 0.70),
             'stubble': (0.26, ry * 0.76),
         }[beard]
@@ -132,30 +151,6 @@ def face(background, hair, width, beard, glasses,
             ellipse(cheek_draw, cx + side * rx * 0.58, cy + ry * 0.22,
                     rx * 0.16, ry * 0.08, fill=CHEEK)
         image.alpha_composite(cheeks)
-
-    if beard == 'sparse':
-        # A few short hairs scattered along the jaw and chin: very sparse
-        # stubble. Seeded, so every run draws the same face.
-        rng = random.Random(7)
-        hairs = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-        hd = ImageDraw.Draw(hairs)
-        colour = hair[:3] + (150,)
-        placed = 0
-        while placed < 26:
-            x = cx + rng.uniform(-1, 1) * rx * 0.92
-            y = cy + rng.uniform(0.22, 0.95) * ry
-            inside = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 < 0.86
-            near_mouth = abs(x - cx) < rx * 0.32 and abs(y - (cy + ry * 0.38)) < ry * 0.12
-            near_cheek = (abs(abs(x - cx) - rx * 0.58) < rx * 0.2
-                          and abs(y - (cy + ry * 0.22)) < ry * 0.1)
-            if not inside or near_mouth or near_cheek:
-                continue
-            tilt = rng.uniform(-0.5, 0.5)
-            length = S * 0.016
-            hd.line((x, y, x + length * tilt, y + length), fill=colour,
-                    width=max(1, int(S * 0.006)))
-            placed += 1
-        image.alpha_composite(hairs)
 
     # Smile.
     draw.arc((cx - rx * 0.26, cy + ry * 0.24, cx + rx * 0.26, cy + ry * 0.52),
