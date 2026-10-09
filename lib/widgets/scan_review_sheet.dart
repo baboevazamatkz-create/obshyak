@@ -7,6 +7,7 @@ import '../models/expense_category.dart';
 import '../models/scanned_transaction.dart';
 import '../models/transaction_type.dart';
 import '../theme.dart';
+import 'amount_format.dart';
 
 final _rowDate = DateFormat('d MMM', 'ru');
 
@@ -446,14 +447,14 @@ class _RowEditorState extends State<_RowEditor> {
     super.dispose();
   }
 
-  static String _formatAmount(double value) => value == value.roundToDouble()
-      ? value.toInt().toString()
-      : value.toString();
+  /// Whole tenge, grouped: 12500 reads "12 500". The fields take no
+  /// hundredths, so a fractional amount from the scanner shows rounded.
+  static String _formatAmount(double value) =>
+      groupThousands(value.round().toString());
 
-  /// Accepts the spaces and commas people type into a sum: "12 500,5".
-  static double? _parse(String text) => double.tryParse(
-        text.replaceAll(' ', '').replaceAll(',', '.').trim(),
-      );
+  /// Reads a sum typed with the thousands spaces in it: "12 500".
+  static double? _parse(String text) =>
+      double.tryParse(text.replaceAll(' ', '').trim());
 
   @override
   Widget build(BuildContext context) {
@@ -484,8 +485,8 @@ class _RowEditorState extends State<_RowEditor> {
               Expanded(
                 child: TextField(
                   controller: _amount,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [WholeAmountFormatter()],
                   decoration: InputDecoration(
                     labelText: 'Сумма, ${widget.currency.symbol}',
                     errorText: amountError,
@@ -497,8 +498,8 @@ class _RowEditorState extends State<_RowEditor> {
               Expanded(
                 child: TextField(
                   controller: _personal,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [WholeAmountFormatter()],
                   decoration: InputDecoration(
                     labelText: 'Лично, не в общак',
                     errorText: personalError,

@@ -699,6 +699,25 @@ void main() {
       expect(confirmed!.first.sharedAmount, 1500);
     });
 
+    testWidgets(
+        'amounts in a scanned row are grouped in thousands, whole tenge',
+        (tester) async {
+      await _pumpSheet(
+        tester,
+        result: parsed(),
+        duplicates: const {},
+        onConfirm: (_) {},
+      );
+      await tester.enterText(find.byType(TextField).at(0), '1234567');
+      await tester.pumpAndSettle();
+      expect(find.text('1 234 567'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField).at(0), '1234,5');
+      await tester.pumpAndSettle();
+      // No hundredths: the decimal part is not taken.
+      expect(find.text('1 234'), findsOneWidget);
+    });
+
     testWidgets('a personal part above the amount cannot be added',
         (tester) async {
       await _pumpSheet(
