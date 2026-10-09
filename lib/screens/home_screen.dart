@@ -506,7 +506,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            title: const Text('Общак'),
+            // Whose phone this is, where the app's name used to be.
+            title: Text(widget.myName),
             titleSpacing: 24,
             actions: [
               IconButton(
@@ -519,18 +520,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.history_rounded),
                 tooltip: 'История',
               ),
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 20),
-                  child: Text(
-                    widget.myName,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: accentForeground(context).withValues(alpha: 0.7),
-                    ),
-                  ),
-                ),
-              ),
+              const SizedBox(width: 8),
             ],
           ),
           // All the buttons share the one FAB slot, laid out across the full
