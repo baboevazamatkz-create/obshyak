@@ -67,6 +67,23 @@ jobs:
         env:
           SCAN_ENDPOINT: ${{ vars.SCAN_ENDPOINT }}
 
+      # Stamps this deploy's commit into the page and build.txt, which the
+      # page compares to reload itself when a newer deploy is out (see
+      # web/index.html). The same stamp goes on the app's scripts, so the
+      # reload cannot be answered from the browser's cache of the old ones.
+      - name: Stamp the build
+        run: |
+          BUILD="${GITHUB_SHA::12}"
+          printf '%s' "$BUILD" > build/web/build.txt
+          sed -i "s/__BUILD__/$BUILD/" build/web/index.html
+          sed -i "s/flutter_bootstrap\.js\"/flutter_bootstrap.js?v=$BUILD\"/" \
+            build/web/index.html
+          sed -i "s/\"mainJsPath\":\"main\.dart\.js\"/\"mainJsPath\":\"main.dart.js?v=$BUILD\"/" \
+            build/web/flutter_bootstrap.js
+          grep -q "flutter_bootstrap.js?v=$BUILD" build/web/index.html
+          grep -q "main.dart.js?v=$BUILD" build/web/flutter_bootstrap.js
+          grep -q "BUILD = '$BUILD'" build/web/index.html
+
       # Without this, Pages runs the output through Jekyll, which drops any
       # file or directory whose name starts with an underscore.
       - name: Disable Jekyll processing
