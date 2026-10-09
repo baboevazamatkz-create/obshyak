@@ -494,6 +494,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Proposing a fine sits right above the add button, in the same column.
+  Widget _fineButton() {
+    return FloatingActionButton.small(
+      heroTag: 'propose_fine',
+      backgroundColor: expenseColor(context).withValues(alpha: kFabFillOpacity),
+      foregroundColor: const Color(0xFFF6F2EA),
+      onPressed: _openFineSheet,
+      tooltip: 'Предложить штраф',
+      child: const Icon(Icons.gavel_rounded, size: 20),
+    );
+  }
+
   /// The one add button: a purchase always comes in through its receipt.
   Widget _scanButton(List<Expense> expenses) {
     return FloatingActionButton(
@@ -557,11 +569,6 @@ class _HomeScreenState extends State<HomeScreen> {
             titleSpacing: 24,
             actions: [
               IconButton(
-                onPressed: _openFineSheet,
-                icon: const Icon(Icons.gavel_rounded),
-                tooltip: 'Штраф',
-              ),
-              IconButton(
                 onPressed: _openHistory,
                 icon: const Icon(Icons.history_rounded),
                 tooltip: 'История',
@@ -584,7 +591,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   snapshot.hasData && _isAdmin
                       ? _clearButton()
                       : const SizedBox.shrink(),
-                  _scanButton(expenses),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _fineButton(),
+                      const SizedBox(height: 14),
+                      _scanButton(expenses),
+                    ],
+                  ),
                 ],
               ),
             ),
