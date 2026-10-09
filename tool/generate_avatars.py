@@ -36,14 +36,18 @@ MOUTH = (120, 48, 44, 255)
 FRAME = (28, 28, 36, 255)
 CHEEK = (236, 140, 130, 90)
 
+# Every face is drawn at the same size and height, sized so the longest
+# beard still ends inside the disc. Only the face's width differs, where
+# the description asks for a slimmer face.
+FACE_SIZE = 0.88
+FACE_CENTRE = 0.45
+
 PEOPLE = [
-    # file, background, hair, face width, beard, glasses, face size, centre
-    # The long beard needs the face smaller and higher to end inside the
-    # disc rather than run off its edge.
-    ('azamat', (196, 160, 92, 255), BLACK_HAIR, 1.0, 'long', False, 0.86, 0.44),
-    ('aslan', (74, 150, 140, 255), BLACK_HAIR, 0.78, 'short', False, 1.0, 0.53),
-    ('muhammad', (132, 102, 176, 255), BROWN_HAIR, 1.0, 'medium', True, 1.0, 0.52),
-    ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, 'sparse', True, 1.0, 0.53),
+    # file, background, hair, face width, beard, glasses
+    ('azamat', (196, 160, 92, 255), BLACK_HAIR, 1.0, 'long', False),
+    ('aslan', (74, 150, 140, 255), BLACK_HAIR, 0.78, 'short', False),
+    ('muhammad', (132, 102, 176, 255), BROWN_HAIR, 1.0, 'medium', True),
+    ('imran', (78, 128, 200, 255), BLACK_HAIR, 0.96, 'sparse', True),
 ]
 
 # How much of the hair colour shows through each beard. Stubble is the same
@@ -58,7 +62,8 @@ def ellipse(draw, cx, cy, rx, ry, **kw):
     draw.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), **kw)
 
 
-def face(background, hair, width, beard, glasses, size, centre):
+def face(background, hair, width, beard, glasses,
+         size=FACE_SIZE, centre=FACE_CENTRE):
     image = Image.new('RGBA', (S, S), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     cx, cy = S / 2, S * centre
