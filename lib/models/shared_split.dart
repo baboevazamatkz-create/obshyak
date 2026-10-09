@@ -29,6 +29,18 @@ class PoolPerson {
   });
 }
 
+/// Two flatmates who owe each other: [amount] of each debt can be cancelled
+/// against the other, leaving only the difference.
+class Offset {
+  final String a;
+  final String b;
+  final double amount;
+
+  const Offset({required this.a, required this.b, required this.amount});
+
+  bool involves(String name) => name == a || name == b;
+}
+
 /// One transfer that settles the flat: [from] pays [to] [amount].
 class Settlement {
   final String from;
@@ -56,10 +68,14 @@ class SharedPool {
   /// debt is never cancelled out by one running the other way.
   final List<Settlement> settlements;
 
+  /// Pairs who owe each other, and how much of it can be cancelled out.
+  final List<Offset> offsets;
+
   const SharedPool({
     required this.people,
     required this.sharedTotal,
     required this.settlements,
+    this.offsets = const [],
   });
 
   /// Each person's fair share of what was bought for the flat.
@@ -85,7 +101,15 @@ SharedPool sharedPool(List<Expense> expenses) {
   var sharedTotal = 0.0;
 
   for (final expense in expenses) {
-    if (expense.isFine) {
+    if (expense.isOffset) {
+      // Both debts go down by the same amount; nobody's balance moves.
+      final to = expense.recipient;
+      if (owes.containsKey(expense.author) && owes.containsKey(to)) {
+        owes[expense.author]![to!] =
+            owes[expense.author]![to]! - expense.amount;
+        owes[to]![expense.author] = owes[to]![expense.author]! - expense.amount;
+      }
+    } else if (expense.isFine) {
       // A fine in force is a debt from the offender to the other three,
       // shared equally between them. It is not spending.
       final offender = expense.offender;
@@ -141,6 +165,7 @@ SharedPool sharedPool(List<Expense> expenses) {
     people: people,
     sharedTotal: sharedTotal,
     settlements: _settle(owes),
+    offsets: _offsets(owes),
   );
 }
 
@@ -158,6 +183,24 @@ List<Settlement> _settle(Map<String, Map<String, double>> owes) {
       final amount = owes[from]![to]!.roundToDouble();
       if (amount < kSettledThreshold) continue;
       result.add(Settlement(from: from, to: to, amount: amount));
+    }
+  }
+  return result;
+}
+
+/// Every pair who owe each other at the same time, with the smaller of
+/// the two debts: what a mutual offset would cancel on both sides.
+List<Offset> _offsets(Map<String, Map<String, double>> owes) {
+  final result = <Offset>[];
+  for (var i = 0; i < kRoommates.length; i++) {
+    for (var j = i + 1; j < kRoommates.length; j++) {
+      final a = kRoommates[i];
+      final b = kRoommates[j];
+      final ab = owes[a]![b]!;
+      final ba = owes[b]![a]!;
+      final common = (ab < ba ? ab : ba).roundToDouble();
+      if (common < kSettledThreshold) continue;
+      result.add(Offset(a: a, b: b, amount: common));
     }
   }
   return result;

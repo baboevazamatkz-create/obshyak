@@ -71,6 +71,7 @@ class Expense {
   bool get isTransfer => type == TransactionType.transfer;
   bool get isPendingTransfer => isTransfer && !confirmed;
   bool get isFine => type == TransactionType.fine;
+  bool get isOffset => type == TransactionType.offset;
 
   /// What goes into the flat's split: the receipt minus the personal part.
   double get sharedAmount {

@@ -54,25 +54,29 @@ class ExpenseTile extends StatelessWidget {
             ? accentForeground(context).withValues(alpha: 0.4)
             : fine == FineStatus.active
                 ? expenseColor(context)
-                : isTransfer
+                : isTransfer || expense.isOffset
                     ? goldFor(context)
                     : isIncome
                         ? incomeColor(context)
                         : expenseColor(context);
-    final icon = expense.isFine
-        ? Icons.gavel_rounded
-        : isTransfer
-            ? Icons.swap_horiz_rounded
-            : isIncome
-                ? Icons.arrow_downward_rounded
-                : Icons.shopping_basket_outlined;
-    final title = expense.isFine
-        ? 'Штраф: ${expense.offender ?? ''}'
-        : isTransfer
-            ? '${expense.author} → ${expense.recipient ?? ''}'
-            : isIncome
-                ? 'Доход'
-                : (expense.note.isNotEmpty ? expense.note : 'Покупка');
+    final icon = expense.isOffset
+        ? Icons.compare_arrows_rounded
+        : expense.isFine
+            ? Icons.gavel_rounded
+            : isTransfer
+                ? Icons.swap_horiz_rounded
+                : isIncome
+                    ? Icons.arrow_downward_rounded
+                    : Icons.shopping_basket_outlined;
+    final title = expense.isOffset
+        ? '${expense.author} ⇄ ${expense.recipient ?? ''}'
+        : expense.isFine
+            ? 'Штраф: ${expense.offender ?? ''}'
+            : isTransfer
+                ? '${expense.author} → ${expense.recipient ?? ''}'
+                : isIncome
+                    ? 'Доход'
+                    : (expense.note.isNotEmpty ? expense.note : 'Покупка');
     final details = [
       if (fine != null) ...[
         expense.note,
@@ -82,15 +86,21 @@ class ExpenseTile extends StatelessWidget {
           FineStatus.cancelled => 'отменён',
         },
       ],
-      if (!isTransfer && fine == null && expense.author.isNotEmpty)
+      if (!isTransfer &&
+          !expense.isOffset &&
+          fine == null &&
+          expense.author.isNotEmpty)
         expense.author,
+      if (expense.isOffset) 'взаимозачёт',
       if (isTransfer) expense.confirmed ? 'вернул долг' : 'ожидает',
       if (isIncome && expense.note.isNotEmpty) expense.note,
       if (expense.personal > 0)
         'личное ${currency.format.format(expense.personal)}',
       if (expense.receiptId != null) 'чек',
     ].join(' · ');
-    final sign = isTransfer || expense.isFine ? '' : (isIncome ? '+' : '−');
+    final sign = isTransfer || expense.isFine || expense.isOffset
+        ? ''
+        : (isIncome ? '+' : '−');
     final displayAmount = amountOverride ?? expense.amount;
     final approxPrefix = isApproximate ? '≈ ' : '';
     final ink = accentForeground(context);

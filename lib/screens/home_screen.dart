@@ -217,6 +217,30 @@ class _HomeScreenState extends State<HomeScreen> {
     await _repository.answerFine(kSharedBudgetCode, fine.id, answer);
   }
 
+  /// Cancels two flatmates' debts to each other against one another. No
+  /// money moves, so it takes effect at once; whatever is left of the
+  /// larger debt stays to be paid.
+  Future<void> _offsetDebts(Offset offset) async {
+    final amount = kBudgetCurrency.format.format(offset.amount);
+    final sure = await _ask(
+      'Зачесть встречные долги?',
+      '${offset.a} и ${offset.b} должны друг другу. По $amount с каждой '
+          'стороны спишется, разница останется долгом.',
+      'Зачесть',
+    );
+    if (!sure) return;
+    final other = offset.a == widget.myName ? offset.b : offset.a;
+    await _addExpense(Expense(
+      id: const Uuid().v4(),
+      amount: offset.amount,
+      date: DateTime.now(),
+      currency: kBudgetCurrency,
+      type: TransactionType.offset,
+      author: widget.myName,
+      recipient: other,
+    ));
+  }
+
   /// The recipient confirms that a pending transfer arrived.
   Future<void> _confirmReceived(Expense transfer) async {
     final amount = kBudgetCurrency.format.format(transfer.amount);
@@ -612,6 +636,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ],
                                     onPaid: _markPaid,
                                     onConfirm: _confirmReceived,
+                                    onOffset: _offsetDebts,
                                   ),
                                   for (final fine in expenses)
                                     if (fine.isFine &&

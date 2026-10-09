@@ -26,6 +26,9 @@ class SplitCard extends StatelessWidget {
   /// The recipient confirms a pending transfer arrived.
   final ValueChanged<Expense> onConfirm;
 
+  /// One of a pair who owe each other cancels the debts against each other.
+  final ValueChanged<Offset> onOffset;
+
   const SplitCard({
     super.key,
     required this.pool,
@@ -34,6 +37,7 @@ class SplitCard extends StatelessWidget {
     required this.pending,
     required this.onPaid,
     required this.onConfirm,
+    required this.onOffset,
   });
 
   Expense? _pendingFor(Settlement settlement) {
@@ -133,6 +137,41 @@ class SplitCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
+            for (final offset in pool.offsets)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${offset.a} ⇄ ${offset.b}',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.5, color: ink),
+                      ),
+                    ),
+                    Text(
+                      currency.format.format(offset.amount),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: ink,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    if (offset.involves(myName))
+                      _SettleButton(
+                        label: 'Зачесть',
+                        color: goldFor(context),
+                        onPressed: () => onOffset(offset),
+                      )
+                    else
+                      _Status(
+                        'встречные',
+                        accentForeground(context).withValues(alpha: 0.45),
+                      ),
+                  ],
+                ),
+              ),
             for (final settlement in pool.settlements)
               // Spaced apart so a thumb lands on one row, not between two.
               Padding(

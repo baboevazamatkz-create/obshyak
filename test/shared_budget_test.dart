@@ -84,6 +84,38 @@ void main() {
       expect(between('Азамат', 'Аслан').amount, 2000);
     });
 
+    test('an offset cancels the common part and leaves the difference', () {
+      final records = [buy('Азамат', 8000), buy('Аслан', 6000)];
+      final before = sharedPool(records);
+      final offer = before.offsets.single;
+      expect(offer.involves('Азамат') && offer.involves('Аслан'), isTrue);
+      expect(offer.amount, 1500);
+
+      final after = sharedPool([
+        ...records,
+        Expense(
+          id: 'offset',
+          amount: offer.amount,
+          date: DateTime(2026, 10, 3),
+          author: 'Аслан',
+          recipient: 'Азамат',
+          currency: AppCurrency.kzt,
+          type: TransactionType.offset,
+        ),
+      ]);
+      Settlement? between(String from, String to) => after.settlements
+          .where((s) => s.from == from && s.to == to)
+          .firstOrNull;
+      // Аслан owed 2 000, Азамат 1 500: 500 is left, the other way gone.
+      expect(between('Аслан', 'Азамат')!.amount, 500);
+      expect(between('Азамат', 'Аслан'), isNull);
+      expect(after.offsets, isEmpty);
+      // Nobody's balance moves.
+      for (var i = 0; i < kRoommates.length; i++) {
+        expect(after.people[i].balance, before.people[i].balance);
+      }
+    });
+
     test('the personal part of a receipt is not split', () {
       final pool = sharedPool([buy('Имран', 10000, personal: 2000)]);
       expect(pool.sharedTotal, 8000);
@@ -585,17 +617,20 @@ void main() {
       List<Expense> pending = const [],
       ValueChanged<Settlement>? onPaid,
       ValueChanged<Expense>? onConfirm,
+      ValueChanged<Offset>? onOffset,
+      List<Expense> extra = const [],
     }) {
       return tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
             child: SplitCard(
-              pool: sharedPool([purchase, ...pending]),
+              pool: sharedPool([purchase, ...extra, ...pending]),
               currency: AppCurrency.kzt,
               myName: me,
               pending: pending,
               onPaid: onPaid ?? (_) {},
               onConfirm: onConfirm ?? (_) {},
+              onOffset: onOffset ?? (_) {},
             ),
           ),
         ),
@@ -635,6 +670,30 @@ void main() {
       expect(confirmed!.id, 'sent');
     });
 
+    testWidgets('only the two who owe each other can offset', (tester) async {
+      final theirs = Expense(
+        id: 'theirs',
+        amount: 4000,
+        date: DateTime(2026, 10, 2),
+        author: 'Аслан',
+        currency: AppCurrency.kzt,
+      );
+      Offset? offered;
+      await pump(
+        tester,
+        me: 'Азамат',
+        extra: [theirs],
+        onOffset: (o) => offered = o,
+      );
+      expect(find.text('Азамат ⇄ Аслан'), findsOneWidget);
+      await tester.tap(find.text('Зачесть'));
+      expect(offered!.amount, 1000);
+
+      await pump(tester, me: 'Имран', extra: [theirs]);
+      expect(find.text('Зачесть'), findsNothing);
+      expect(find.text('встречные'), findsOneWidget);
+    });
+
     testWidgets('a settled flat says so instead of listing transfers',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
@@ -647,6 +706,7 @@ void main() {
               pending: const [],
               onPaid: (_) {},
               onConfirm: (_) {},
+              onOffset: (_) {},
             ),
           ),
         ),
