@@ -17,6 +17,7 @@ import '../theme.dart';
 import '../widgets/add_expense_sheet.dart';
 import '../widgets/ai_scan_icon.dart';
 import '../widgets/app_background_pattern.dart';
+import '../widgets/avatar.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/fine_banner.dart';
 import '../widgets/fine_sheet.dart';
@@ -507,7 +508,15 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             // Whose phone this is, where the app's name used to be.
-            title: Text(widget.myName),
+            title: Row(
+              children: [
+                Avatar(widget.myName, size: 30),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(widget.myName, overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
             titleSpacing: 24,
             actions: [
               IconButton(

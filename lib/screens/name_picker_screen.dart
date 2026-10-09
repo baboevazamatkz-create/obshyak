@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/shared_budget.dart';
 import '../theme.dart';
 import '../widgets/app_background_pattern.dart';
+import '../widgets/avatar.dart';
 
 /// Shown once per phone: whoever opens the app first picks which flatmate
 /// they are, and that name goes on everything they enter.
@@ -63,12 +64,18 @@ class NamePickerScreen extends StatelessWidget {
                           ),
                           foregroundColor: accentForeground(context),
                         ),
-                        child: Text(
-                          name,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        child: Row(
+                          children: [
+                            Avatar(name, size: 34),
+                            const SizedBox(width: 14),
+                            Text(
+                              name,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 12),

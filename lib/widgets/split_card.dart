@@ -4,6 +4,7 @@ import '../models/currency.dart';
 import '../models/expense.dart';
 import '../models/shared_split.dart';
 import '../theme.dart';
+import 'avatar.dart';
 
 /// The flat's standing at the top of the list: what each flatmate paid for
 /// everyone, where each stands against a fair quarter, and the transfers
@@ -74,14 +75,22 @@ class SplitCard extends StatelessWidget {
                 children: [
                   Expanded(
                     flex: 4,
-                    child: Text(
-                      person.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: ink,
-                      ),
+                    child: Row(
+                      children: [
+                        Avatar(person.name, size: 22),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            person.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: ink,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
