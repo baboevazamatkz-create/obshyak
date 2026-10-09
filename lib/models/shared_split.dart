@@ -36,9 +36,22 @@ class Offset {
   final String b;
   final double amount;
 
-  const Offset({required this.a, required this.b, required this.amount});
+  /// What is left once the two debts are offset: who still pays whom, or
+  /// null when they cancel out exactly.
+  final Settlement? remainder;
+
+  const Offset({
+    required this.a,
+    required this.b,
+    required this.amount,
+    this.remainder,
+  });
 
   bool involves(String name) => name == a || name == b;
+
+  /// Whether [settlement] is one of the two debts this offset covers.
+  bool covers(Settlement settlement) =>
+      involves(settlement.from) && involves(settlement.to);
 }
 
 /// One transfer that settles the flat: [from] pays [to] [amount].
@@ -200,7 +213,17 @@ List<Offset> _offsets(Map<String, Map<String, double>> owes) {
       final ba = owes[b]![a]!;
       final common = (ab < ba ? ab : ba).roundToDouble();
       if (common < kSettledThreshold) continue;
-      result.add(Offset(a: a, b: b, amount: common));
+      final left = (ab - ba).abs().roundToDouble();
+      result.add(Offset(
+        a: a,
+        b: b,
+        amount: common,
+        remainder: left < kSettledThreshold
+            ? null
+            : ab > ba
+                ? Settlement(from: a, to: b, amount: left)
+                : Settlement(from: b, to: a, amount: left),
+      ));
     }
   }
   return result;

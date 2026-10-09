@@ -140,65 +140,81 @@ class SplitCard extends StatelessWidget {
             for (final offset in pool.offsets)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        '${offset.a} ⇄ ${offset.b}',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13.5, color: ink),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${offset.a} ⇄ ${offset.b}',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13.5, color: ink),
+                          ),
+                        ),
+                        Text(
+                          currency.format.format(offset.amount),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: ink,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        _ActionSlot(
+                          child: offset.involves(myName)
+                              ? _SettleButton(
+                                  label: 'Зачесть',
+                                  color: goldFor(context),
+                                  onPressed: () => onOffset(offset),
+                                )
+                              : _Status(
+                                  'встречные',
+                                  accentForeground(context)
+                                      .withValues(alpha: 0.45),
+                                ),
+                        ),
+                      ],
                     ),
                     Text(
-                      currency.format.format(offset.amount),
+                      _remainderNote(offset),
                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: ink,
+                        fontSize: 12,
+                        color: ink.withValues(alpha: 0.55),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    _ActionSlot(
-                      child: offset.involves(myName)
-                          ? _SettleButton(
-                              label: 'Зачесть',
-                              color: goldFor(context),
-                              onPressed: () => onOffset(offset),
-                            )
-                          : _Status(
-                              'встречные',
-                              accentForeground(context).withValues(alpha: 0.45),
-                            ),
                     ),
                   ],
                 ),
               ),
+            // A pair that can offset shows one line for both debts above,
+            // unless a transfer between them is already waiting on someone.
             for (final settlement in pool.settlements)
-              // Spaced apart so a thumb lands on one row, not between two.
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${settlement.from} → ${settlement.to}',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13.5, color: ink),
+              if (!_hiddenByOffset(settlement))
+                // Spaced apart so a thumb lands on one row, not between two.
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${settlement.from} → ${settlement.to}',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13.5, color: ink),
+                        ),
                       ),
-                    ),
-                    Text(
-                      currency.format.format(settlement.amount),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: ink,
+                      Text(
+                        currency.format.format(settlement.amount),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: ink,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    _ActionSlot(child: _action(context, settlement)),
-                  ],
+                      const SizedBox(width: 4),
+                      _ActionSlot(child: _action(context, settlement)),
+                    ],
+                  ),
                 ),
-              ),
           ],
         ],
       ),
@@ -229,6 +245,18 @@ class SplitCard extends StatelessWidget {
       );
     }
     return const _Status('ожидает', kPendingColor, filled: true);
+  }
+
+  String _remainderNote(Offset offset) {
+    final left = offset.remainder;
+    if (left == null) return 'после зачёта долгов между ними нет';
+    return 'после зачёта: ${left.from} → ${left.to} '
+        '${currency.format.format(left.amount)}';
+  }
+
+  bool _hiddenByOffset(Settlement settlement) {
+    if (_pendingFor(settlement) != null) return false;
+    return pool.offsets.any((offset) => offset.covers(settlement));
   }
 
   String _signed(double balance) {

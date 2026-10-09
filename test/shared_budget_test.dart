@@ -686,8 +686,15 @@ void main() {
         onOffset: (o) => offered = o,
       );
       expect(find.text('Азамат ⇄ Аслан'), findsOneWidget);
+      // Азамат owes Аслан 1 000, Аслан owes Азамат 2 000: one line, with
+      // what is left after the offset, instead of two opposing rows.
+      expect(
+          find.textContaining('после зачёта: Аслан → Азамат'), findsOneWidget);
+      expect(find.text('Аслан → Азамат'), findsNothing);
+      expect(find.text('Азамат → Аслан'), findsNothing);
       await tester.tap(find.text('Зачесть'));
       expect(offered!.amount, 1000);
+      expect(offered!.remainder!.amount, 1000);
 
       await pump(tester, me: 'Имран', extra: [theirs]);
       expect(find.text('Зачесть'), findsNothing);
