@@ -11,6 +11,7 @@ import '../theme.dart';
 import '../widgets/ai_scan_icon.dart';
 import '../widgets/glass.dart';
 import '../widgets/scan_review_sheet.dart';
+import 'camera_capture_screen.dart';
 
 /// Where the snapshot comes from.
 enum ScanSource { camera, gallery }
@@ -24,9 +25,12 @@ enum ScanSource { camera, gallery }
 /// camera or a network.
 class ScanFlow {
   final ScanService service;
-  final Future<List<Uint8List>> Function(ScanSource source) pickImages;
 
-  ScanFlow({ScanService? service, this.pickImages = pickScanImages})
+  /// Gets the snapshots: the camera, open straight away, with the gallery
+  /// in its corner. An empty list means the user closed it.
+  final Future<List<Uint8List>> Function(BuildContext context) capture;
+
+  ScanFlow({ScanService? service, this.capture = captureReceipt})
       : service = service ?? ScanService();
 
   Future<void> run(
@@ -46,12 +50,9 @@ class ScanFlow {
     // on top of text this flow draws over it.
     FocusScope.of(context).unfocus();
 
-    final source = await _askSource(context);
-    if (source == null || !context.mounted) return;
-
     final List<Uint8List> raw;
     try {
-      raw = await pickImages(source);
+      raw = await capture(context);
     } catch (_) {
       if (context.mounted) {
         _toast(context, 'Не удалось открыть снимок');
@@ -136,47 +137,6 @@ class ScanFlow {
   /// Closes the underlying HTTP client. Called when the screen holding
   /// the flow goes away: a client left open keeps its connections alive.
   void dispose() => service.dispose();
-
-  Future<ScanSource?> _askSource(BuildContext context) =>
-      showModalBottomSheet<ScanSource>(
-        context: context,
-        backgroundColor: Colors.transparent,
-        builder: (context) => GlassSheet(
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 6),
-                  child: Text(
-                    'РАСПОЗНАТЬ СНИМОК',
-                    style:
-                        microLabel(context, size: 11, color: goldFor(context)),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_camera_rounded),
-                  title: const Text('Снять чек'),
-                  subtitle: const Text('Кадр целиком, без бликов'),
-                  onTap: () => Navigator.of(context).pop(ScanSource.camera),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_library_rounded),
-                  title: const Text('Выбрать из галереи'),
-                  subtitle: const Text(
-                    'Чек или скриншот из банка, до '
-                    '$kMaxScanSnapshots снимков сразу',
-                  ),
-                  onTap: () => Navigator.of(context).pop(ScanSource.gallery),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ),
-      );
 
   void _showProgress(BuildContext context) {
     // Spoken once, rather than left as a standing label on the text below:
@@ -277,6 +237,17 @@ class ScanProgressContent extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The real capture: the camera screen, pushed full screen.
+Future<List<Uint8List>> captureReceipt(BuildContext context) async {
+  final shots = await Navigator.of(context).push<List<Uint8List>>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (context) => const CameraCaptureScreen(),
+    ),
+  );
+  return shots ?? const [];
 }
 
 /// The real picker.

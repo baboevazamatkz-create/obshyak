@@ -323,7 +323,7 @@ void main() {
     }) async {
       Uint8List? manualPhoto;
       var added = false;
-      final flow = ScanFlow(pickImages: (_) async => picked);
+      final flow = ScanFlow(capture: (_) async => picked);
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(Brightness.dark),
@@ -345,8 +345,6 @@ void main() {
         ),
       );
       await tester.tap(find.text('scan'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Выбрать из галереи'));
       await tester.runAsync(() => Future<void>.delayed(
             const Duration(milliseconds: 500),
           ));
@@ -383,7 +381,7 @@ void main() {
       final focusNode = FocusNode();
       addTearDown(focusNode.dispose);
       final flow = ScanFlow(
-        pickImages: (_) async => [],
+        capture: (_) async => [],
       );
 
       await tester.pumpWidget(
@@ -416,14 +414,14 @@ void main() {
       await tester.tap(find.text('scan'));
       await tester.pump();
 
-      // Dropped as soon as the flow starts, before the source sheet even
-      // finishes animating in -- a lingering focused field is what leaves
+      // Dropped as soon as the flow starts, before the camera even opens
+      // -- a lingering focused field is what leaves
       // the browser's own hidden input, and whatever decoration it
       // carries, sitting at its old position.
       expect(focusNode.hasFocus, isFalse);
 
-      // Let the sheet's animation and the picker's empty result settle so
-      // the test does not leave a pending timer behind.
+      // Let the empty capture settle so the test does not leave a pending
+      // timer behind.
       await tester.pumpAndSettle();
     });
 
