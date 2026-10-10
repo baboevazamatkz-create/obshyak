@@ -80,7 +80,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// The latest word on who is away. New purchases and fines are stamped
   /// with who is home at the moment they are entered.
-  AwayBook _away = const AwayBook();
+  AwayBook _away = AwayBook();
+
+  /// Fines whose judges are being narrowed right now, so one snapshot does
+  /// not send the same write twice.
+  final Set<String> _narrowing = {};
 
   // The list's own controller, read by the top-edge fade so the band can
   // follow the scroll offset.
@@ -471,6 +475,31 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showReceipt(String receiptId) =>
       showReceiptDialog(context, _repository, receiptId);
 
+  /// Someone who went away while a fine was still being voted on drops out
+  /// of it: they no longer judge it, and its money is shared without them.
+  /// The offender stays, so a fine already put to them can still stand.
+  ///
+  /// Driven by the snapshot like [_archiveIfSettled], so any phone that
+  /// sees it does it, and doing it twice writes the same thing.
+  void _dropAwayJudges(List<Expense> open) {
+    for (final fine in open) {
+      if (!fine.isFine || fineStatus(fine) != FineStatus.voting) continue;
+      final keep = [
+        for (final name in fine.sharers)
+          if (!_away.isAway(name) || name == fine.offender) name,
+      ];
+      if (keep.length == fine.sharers.length) continue;
+      if (!_narrowing.add(fine.id)) continue;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          await _repository.setFineMembers(kSharedBudgetCode, fine.id, keep);
+        } finally {
+          _narrowing.remove(fine.id);
+        }
+      });
+    }
+  }
+
   /// Moves the open period to history once everyone is square.
   ///
   /// Driven by the snapshot rather than by the button that settled the last
@@ -629,7 +658,10 @@ class _HomeScreenState extends State<HomeScreen> {
           for (final expense in snapshot.data ?? const <Expense>[])
             if (expense.archivedAt == null) expense,
         ];
-        if (snapshot.hasData) _archiveIfSettled(expenses);
+        if (snapshot.hasData) {
+          _dropAwayJudges(expenses);
+          _archiveIfSettled(expenses);
+        }
         // Real data arrived -- the wait that timer was guarding against is
         // over, so it should not fire a stale "no connection" state later.
         if (snapshot.hasData) _firstLoadTimer?.cancel();
@@ -687,8 +719,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _fineButton(),
-                      const SizedBox(height: 14),
+                      // Away, you neither fine anyone nor get fined.
+                      if (!_away.isAway(widget.myName)) ...[
+                        _fineButton(),
+                        const SizedBox(height: 14),
+                      ],
                       _scanButton(expenses),
                     ],
                   ),
@@ -746,13 +781,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                     },
                                   ),
                                   for (final request in _away.requests.values)
-                                    if (request.status == AwayStatus.pending ||
-                                        (request.status ==
+                                    if (_away.statusOf(request.name) ==
+                                            AwayStatus.pending ||
+                                        (_away.statusOf(request.name) ==
                                                 AwayStatus.rejected &&
                                             request.name == widget.myName))
                                       AwayBanner(
                                         request: request,
                                         myName: widget.myName,
+                                        book: _away,
                                         onVote: (vote) =>
                                             _voteAway(request, vote),
                                         onDismiss: () => _repository.clearAway(

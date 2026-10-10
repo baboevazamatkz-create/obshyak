@@ -8,6 +8,7 @@ import 'package:expense_tracker/models/fines.dart';
 import 'package:expense_tracker/models/shared_split.dart';
 import 'package:expense_tracker/models/transaction_type.dart';
 import 'package:expense_tracker/widgets/away_banner.dart';
+import 'package:expense_tracker/widgets/fine_banner.dart';
 
 final _day = DateTime(2026, 10, 1);
 var _id = 0;
@@ -116,22 +117,38 @@ void main() {
       expect(owed(pool, 'Аслан', 'Мухаммад'), 1500);
       expect(owed(pool, 'Аслан', 'Имран'), 0);
     });
+
+    testWidgets('someone who is not a judge gets no vote buttons',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: FineBanner(
+            fine: f,
+            myName: 'Имран',
+            onVote: (_) {},
+            onAnswer: (_) {},
+          ),
+        ),
+      ));
+      expect(find.text('Назначить'), findsNothing);
+      expect(find.textContaining('Ждём'), findsOneWidget);
+    });
   });
 
   group('the away request', () {
     test('waits until everyone home agrees', () {
-      expect(request().status, AwayStatus.pending);
+      expect(request().status(), AwayStatus.pending);
       expect(
-        request(votes: {'Азамат': kAwayYes}).awaiting,
+        request(votes: {'Азамат': kAwayYes}).awaiting(),
         ['Аслан', 'Мухаммад'],
       );
       final agreed = request(votes: {for (final n in home) n: kAwayYes});
-      expect(agreed.status, AwayStatus.away);
+      expect(agreed.status(), AwayStatus.away);
     });
 
     test('one no turns it down', () {
       final r = request(votes: {'Азамат': kAwayYes, 'Аслан': kAwayNo});
-      expect(r.status, AwayStatus.rejected);
+      expect(r.status(), AwayStatus.rejected);
       expect(r.rejectedBy, ['Аслан']);
     });
 
@@ -142,12 +159,41 @@ void main() {
       });
       expect(away.present, home);
       expect(away.isAway('Имран'), isTrue);
-      expect(const AwayBook().statusOf('Имран'), AwayStatus.home);
+      expect(AwayBook().statusOf('Имран'), AwayStatus.home);
     });
 
     test('a request with nobody left to ask goes through at once', () {
       final r = AwayRequest(name: 'Имран', since: _day, approvers: const []);
-      expect(r.status, AwayStatus.away);
+      expect(r.status(), AwayStatus.away);
+    });
+
+    test('someone away is not waited on for another request', () {
+      final book = AwayBook({
+        'Имран': request(votes: {'Азамат': kAwayYes, 'Мухаммад': kAwayYes}),
+        'Аслан': AwayRequest(
+          name: 'Аслан',
+          since: _day,
+          approvers: const ['Азамат', 'Мухаммад', 'Имран'],
+          votes: const {'Азамат': kAwayYes, 'Мухаммад': kAwayYes},
+        ),
+      });
+      // Both asking at once: each still waits on the other, who is home
+      // until agreed and can vote.
+      expect(book.isAway('Аслан'), isFalse);
+      expect(book.awaiting(book.requests['Имран']!), ['Аслан']);
+
+      final asl = AwayBook({
+        'Аслан': AwayRequest(
+          name: 'Аслан',
+          since: _day,
+          approvers: const ['Азамат', 'Мухаммад'],
+          votes: const {'Азамат': kAwayYes, 'Мухаммад': kAwayYes},
+        ),
+        'Имран': request(votes: {'Азамат': kAwayYes, 'Мухаммад': kAwayYes}),
+      });
+      expect(asl.isAway('Аслан'), isTrue);
+      expect(asl.isAway('Имран'), isTrue, reason: 'Аслан no longer decides');
+      expect(asl.present, ['Азамат', 'Мухаммад']);
     });
 
     test('reads back from the stored document', () {
@@ -169,6 +215,7 @@ void main() {
             body: AwayBanner(
               request: request(),
               myName: me,
+              book: AwayBook({'Имран': request()}),
               onVote: (v) => vote = v,
               onDismiss: () {},
             ),
@@ -183,6 +230,31 @@ void main() {
     await tester.pumpWidget(banner('Имран'));
     expect(find.text('Согласовать'), findsNothing);
     expect(find.text('Ждём: Азамат, Аслан, Мухаммад'), findsOneWidget);
+  });
+
+  testWidgets('someone away gets no vote on a request', (tester) async {
+    final book = AwayBook({
+      'Имран': request(),
+      'Аслан': AwayRequest(
+        name: 'Аслан',
+        since: _day,
+        approvers: const ['Азамат', 'Мухаммад'],
+        votes: const {'Азамат': kAwayYes, 'Мухаммад': kAwayYes},
+      ),
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: AwayBanner(
+          request: book.requests['Имран']!,
+          myName: 'Аслан',
+          book: book,
+          onVote: (_) {},
+          onDismiss: () {},
+        ),
+      ),
+    ));
+    expect(find.text('Согласовать'), findsNothing);
+    expect(find.text('Ждём: Азамат, Мухаммад'), findsOneWidget);
   });
 
   testWidgets('the button shows where the flatmate stands', (tester) async {

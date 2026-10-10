@@ -53,7 +53,8 @@ class FineBanner extends StatelessWidget {
         onYes: () => onAnswer(kOffenderAccept),
         onNo: () => onAnswer(kOffenderDispute),
       );
-    } else if (!iAmOffender && fine.votes[myName] == null) {
+    } else if (fineJudges(fine).contains(myName) &&
+        fine.votes[myName] == null) {
       actions = _buttons(
         context,
         yes: 'Назначить',

@@ -52,6 +52,10 @@ class AwayBanner extends StatelessWidget {
   final AwayRequest request;
   final String myName;
 
+  /// Who is away, which decides where [request] stands: an approver who
+  /// has gone away is no longer asked.
+  final AwayBook book;
+
   /// An approver's answer: [kAwayYes] or [kAwayNo].
   final ValueChanged<String> onVote;
 
@@ -62,6 +66,7 @@ class AwayBanner extends StatelessWidget {
     super.key,
     required this.request,
     required this.myName,
+    required this.book,
     required this.onVote,
     required this.onDismiss,
   });
@@ -70,7 +75,7 @@ class AwayBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final ink = accentForeground(context);
     final mine = request.name == myName;
-    final rejected = request.status == AwayStatus.rejected;
+    final rejected = book.statusOf(request.name) == AwayStatus.rejected;
 
     final String headline;
     if (rejected) {
@@ -89,6 +94,7 @@ class AwayBanner extends StatelessWidget {
       );
     } else if (!mine &&
         request.approvers.contains(myName) &&
+        !book.isAway(myName) &&
         request.votes[myName] == null) {
       actions = Row(
         children: [
@@ -111,7 +117,7 @@ class AwayBanner extends StatelessWidget {
       );
     } else {
       actions = Text(
-        'Ждём: ${request.awaiting.join(', ')}',
+        'Ждём: ${book.awaiting(request).join(', ')}',
         style: TextStyle(fontSize: 12.5, color: ink.withValues(alpha: 0.6)),
       );
     }

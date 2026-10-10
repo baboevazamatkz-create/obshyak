@@ -29,16 +29,20 @@ class AwayRequest {
     this.votes = const {},
   });
 
-  AwayStatus get status {
+  /// Where the request stands. An approver who has since gone away
+  /// themselves no longer has a say, so [away] are not waited on.
+  AwayStatus status([Set<String> away = const {}]) {
     if (votes.values.contains(kAwayNo)) return AwayStatus.rejected;
-    if (approvers.every((n) => votes[n] == kAwayYes)) return AwayStatus.away;
+    final needed = approvers.where((n) => !away.contains(n));
+    if (needed.every((n) => votes[n] == kAwayYes)) return AwayStatus.away;
     return AwayStatus.pending;
   }
 
-  /// Approvers who have not answered yet, in [kRoommates] order.
-  List<String> get awaiting => [
+  /// Approvers who have not answered yet, in [kRoommates] order, leaving
+  /// out any who are [away].
+  List<String> awaiting([Set<String> away = const {}]) => [
         for (final n in kRoommates)
-          if (approvers.contains(n) && votes[n] == null) n,
+          if (approvers.contains(n) && !away.contains(n) && votes[n] == null) n,
       ];
 
   /// Who turned it down, in [kRoommates] order.
@@ -72,7 +76,7 @@ class AwayRequest {
 class AwayBook {
   final Map<String, AwayRequest> requests;
 
-  const AwayBook([this.requests = const {}]);
+  AwayBook([this.requests = const {}]);
 
   factory AwayBook.fromJson(Map<String, dynamic>? json) => AwayBook({
         for (final name in kRoommates)
@@ -80,9 +84,32 @@ class AwayBook {
             name: request,
       });
 
-  AwayStatus statusOf(String name) => requests[name]?.status ?? AwayStatus.home;
+  /// Everyone away right now. Worked out in rounds: someone going away
+  /// stops being waited on for anybody else's request, which can complete
+  /// that one in turn.
+  late final Set<String> awayNames = () {
+    final away = <String>{};
+    var grew = true;
+    while (grew) {
+      grew = false;
+      for (final request in requests.values) {
+        if (away.contains(request.name)) continue;
+        if (request.status(away) == AwayStatus.away) {
+          away.add(request.name);
+          grew = true;
+        }
+      }
+    }
+    return away;
+  }();
 
-  bool isAway(String name) => statusOf(name) == AwayStatus.away;
+  AwayStatus statusOf(String name) =>
+      requests[name]?.status(awayNames) ?? AwayStatus.home;
+
+  bool isAway(String name) => awayNames.contains(name);
+
+  /// Who [request] still waits on.
+  List<String> awaiting(AwayRequest request) => request.awaiting(awayNames);
 
   /// Everyone living in the flat right now: new purchases and fines are
   /// split between them only. Someone whose request is still waiting is

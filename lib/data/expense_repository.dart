@@ -139,6 +139,16 @@ class ExpenseRepository {
     });
   }
 
+  /// Narrows who a fine still under vote is shared with, when someone has
+  /// gone away before it was decided: they no longer judge it or share it.
+  Future<void> setFineMembers(
+    String householdCode,
+    String fineId,
+    List<String> members,
+  ) {
+    return _expensesRef(householdCode).doc(fineId).update({'members': members});
+  }
+
   /// The offender's answer. A dispute also clears the judges' votes, so
   /// the fine only stands if they all confirm it again.
   Future<void> answerFine(String householdCode, String fineId, String answer) {

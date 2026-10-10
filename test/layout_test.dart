@@ -274,6 +274,7 @@ void main() {
                 approvers: const ['Азамат', 'Аслан', 'Имран'],
               ),
               myName: 'Азамат',
+              book: AwayBook(),
               onVote: (_) {},
               onDismiss: () {},
             ),

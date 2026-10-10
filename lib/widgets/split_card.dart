@@ -85,7 +85,11 @@ class SplitCard extends StatelessWidget {
                     flex: 4,
                     child: Row(
                       children: [
-                        Avatar(person.name, size: 22),
+                        // Faded while away: they are not in new spending.
+                        Opacity(
+                          opacity: away.contains(person.name) ? 0.35 : 1,
+                          child: Avatar(person.name, size: 22),
+                        ),
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text(
