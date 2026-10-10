@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/expense_repository.dart';
 import '../data/scan_service.dart';
+import '../models/away.dart';
 import '../models/currency.dart';
 import '../models/expense.dart';
 import '../models/fines.dart';
@@ -19,6 +20,7 @@ import '../widgets/add_expense_sheet.dart';
 import '../widgets/ai_scan_icon.dart';
 import '../widgets/app_background_pattern.dart';
 import '../widgets/avatar.dart';
+import '../widgets/away_banner.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/fine_banner.dart';
 import '../widgets/fine_sheet.dart';
@@ -74,6 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // build is a brand-new Firestore listener on every rebuild, which drops the
   // loaded data back to a spinner and re-reads the collection each time.
   late Stream<List<Expense>> _expensesStream;
+  late Stream<AwayBook> _awayStream;
+
+  /// The latest word on who is away. New purchases and fines are stamped
+  /// with who is home at the moment they are entered.
+  AwayBook _away = const AwayBook();
 
   // The list's own controller, read by the top-edge fade so the band can
   // follow the scroll offset.
@@ -95,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _expensesStream = _repository.watchExpenses(kSharedBudgetCode);
+    _awayStream = _repository.watchAway(kSharedBudgetCode);
     _startFirstLoadTimer();
     // After the first frame, so the tour has the real screen to sit over.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -122,18 +130,84 @@ class _HomeScreenState extends State<HomeScreen> {
   /// thing to "reconnect" a Firestore stream offers from here.
   void _retryFirstLoad() => setState(() {
         _expensesStream = _repository.watchExpenses(kSharedBudgetCode);
+        _awayStream = _repository.watchAway(kSharedBudgetCode);
         _startFirstLoadTimer();
       });
 
   /// Stamps whoever is using this phone as the author, unless the record
   /// already names one: a transfer is written for whoever paid, and an
-  /// edited record keeps its original author.
+  /// restored record keeps its original author. A new purchase or fine is
+  /// also stamped with who is home, the people it is split between.
   Future<void> _addExpense(Expense expense) {
+    if (expense.author.isNotEmpty) {
+      return _repository.addExpense(kSharedBudgetCode, expense);
+    }
+    final splits = expense.isFine || expense.type == TransactionType.expense;
     return _repository.addExpense(
       kSharedBudgetCode,
-      expense.author.isEmpty
-          ? expense.copyWith(author: widget.myName)
-          : expense,
+      expense.copyWith(
+        author: widget.myName,
+        members: splits ? expense.members ?? _away.present : null,
+      ),
+    );
+  }
+
+  /// The «Отпуск» button: ask to go away, withdraw the request, or come
+  /// back. Only going away needs the others to agree.
+  Future<void> _toggleAway() async {
+    final me = widget.myName;
+    switch (_away.statusOf(me)) {
+      case AwayStatus.away:
+        final sure = await _ask(
+          'Вернулись?',
+          'Новые покупки и штрафы снова будут делиться и на вас.',
+          'Да, вернулся',
+        );
+        if (sure) await _repository.clearAway(kSharedBudgetCode, me);
+      case AwayStatus.pending:
+        final sure = await _ask(
+          'Отменить запрос?',
+          'Запрос на отпуск ещё не согласован. Отменить его?',
+          'Отменить запрос',
+        );
+        if (sure) await _repository.clearAway(kSharedBudgetCode, me);
+      case AwayStatus.home:
+      case AwayStatus.rejected:
+        final approvers = [
+          for (final name in _away.present)
+            if (name != me) name,
+        ];
+        final sure = await _ask(
+          'Уезжаете?',
+          'Остальные получат запрос и должны согласовать. Пока вы в '
+              'отпуске, новые покупки и штрафы на вас не делятся. Текущие '
+              'долги остаются, их нужно закрыть как обычно.',
+          'Попросить отпуск',
+        );
+        if (!sure) return;
+        await _repository.requestAway(
+          kSharedBudgetCode,
+          AwayRequest(name: me, since: DateTime.now(), approvers: approvers),
+        );
+    }
+  }
+
+  Future<void> _voteAway(AwayRequest request, String vote) async {
+    final yes = vote == kAwayYes;
+    final sure = await _ask(
+      yes ? 'Согласовать отпуск?' : 'Отклонить отпуск?',
+      yes
+          ? 'Когда согласуют все, новые покупки и штрафы перестанут '
+              'делиться на ${request.name}.'
+          : 'Одного «нет» достаточно, чтобы запрос не прошёл.',
+      yes ? 'Согласовать' : 'Отклонить',
+    );
+    if (!sure) return;
+    await _repository.voteAway(
+      kSharedBudgetCode,
+      request.name,
+      widget.myName,
+      vote,
     );
   }
 
@@ -187,7 +261,11 @@ class _HomeScreenState extends State<HomeScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => GlassSheet(
-        child: FineSheet(myName: widget.myName, onSubmit: _addExpense),
+        child: FineSheet(
+          myName: widget.myName,
+          onSubmit: _addExpense,
+          members: _away.present,
+        ),
       ),
     );
   }
@@ -292,7 +370,11 @@ class _HomeScreenState extends State<HomeScreen> {
           kSharedBudgetCode,
           [
             for (final expense in added)
-              expense.copyWith(author: widget.myName, receiptId: receiptId),
+              expense.copyWith(
+                author: widget.myName,
+                receiptId: receiptId,
+                members: _away.present,
+              ),
           ],
         );
         if (!mounted) return;
@@ -528,6 +610,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<AwayBook>(
+      stream: _awayStream,
+      builder: (context, awaySnapshot) {
+        _away = awaySnapshot.data ?? _away;
+        return _buildWithExpenses(context);
+      },
+    );
+  }
+
+  Widget _buildWithExpenses(BuildContext context) {
     return StreamBuilder<List<Expense>>(
       stream: _expensesStream,
       builder: (context, snapshot) {
@@ -562,14 +654,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             // Whose phone this is, where the app's name used to be.
-            title: Row(
-              children: [
-                Avatar(widget.myName, size: 30),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(widget.myName, overflow: TextOverflow.ellipsis),
-                ),
-              ],
+            title: HomeTitle(
+              name: widget.myName,
+              away: _away.statusOf(widget.myName),
+              onAway: _toggleAway,
             ),
             titleSpacing: 24,
             actions: [
@@ -652,7 +740,26 @@ class _HomeScreenState extends State<HomeScreen> {
                                     onPaid: _markPaid,
                                     onConfirm: _confirmReceived,
                                     onOffset: _offsetDebts,
+                                    away: {
+                                      for (final name in kRoommates)
+                                        if (_away.isAway(name)) name,
+                                    },
                                   ),
+                                  for (final request in _away.requests.values)
+                                    if (request.status == AwayStatus.pending ||
+                                        (request.status ==
+                                                AwayStatus.rejected &&
+                                            request.name == widget.myName))
+                                      AwayBanner(
+                                        request: request,
+                                        myName: widget.myName,
+                                        onVote: (vote) =>
+                                            _voteAway(request, vote),
+                                        onDismiss: () => _repository.clearAway(
+                                          kSharedBudgetCode,
+                                          widget.myName,
+                                        ),
+                                      ),
                                   for (final fine in expenses)
                                     if (fine.isFine &&
                                         fineStatus(fine) == FineStatus.voting)
@@ -704,6 +811,34 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// The app bar's title: whose phone this is, and their «Отпуск» switch
+/// right beside the name.
+class HomeTitle extends StatelessWidget {
+  final String name;
+  final AwayStatus away;
+  final VoidCallback onAway;
+
+  const HomeTitle({
+    super.key,
+    required this.name,
+    required this.away,
+    required this.onAway,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Avatar(name, size: 30),
+        const SizedBox(width: 10),
+        Flexible(child: Text(name, overflow: TextOverflow.ellipsis)),
+        const SizedBox(width: 10),
+        AwayButton(status: away, onPressed: onAway),
+      ],
     );
   }
 }

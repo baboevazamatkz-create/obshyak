@@ -171,10 +171,12 @@ SharedPool sharedPool(List<Expense> expenses) {
       final shared = expense.sharedAmount;
       paid[author] = paid[author]! + shared;
       sharedTotal += shared;
-      // Everyone else owes the buyer their quarter of it.
-      final shares = splitEvenly(shared, kRoommateCount);
-      for (var i = 0; i < kRoommates.length; i++) {
-        if (kRoommates[i] != author) owe(kRoommates[i], author, shares[i]);
+      // Everyone who was home owes the buyer their share of it; whoever
+      // was away owes nothing for it.
+      final among = expense.sharers;
+      final shares = splitEvenly(shared, among.length);
+      for (var i = 0; i < among.length; i++) {
+        if (among[i] != author) owe(among[i], author, shares[i]);
       }
     }
   }
@@ -281,9 +283,10 @@ Map<String, double> _shoppingRepaid(List<Expense> expenses) {
       settle(author, to!, expense.amount);
       if (expense.isOffset) settle(to, author, expense.amount);
     } else if (!expense.isIncome && shift.containsKey(author)) {
-      final shares = splitEvenly(expense.sharedAmount, kRoommateCount);
-      for (var i = 0; i < kRoommates.length; i++) {
-        final other = kRoommates[i];
+      final among = expense.sharers;
+      final shares = splitEvenly(expense.sharedAmount, among.length);
+      for (var i = 0; i < among.length; i++) {
+        final other = among[i];
         if (other != author) {
           shopping[other]![author] = shopping[other]![author]! + shares[i];
         }

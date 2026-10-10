@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/away.dart';
 import '../models/expense.dart';
 import '../models/fines.dart';
 
@@ -19,6 +20,49 @@ class ExpenseRepository {
   CollectionReference<Map<String, dynamic>> _receiptsRef(
           String householdCode) =>
       _budgetRef(householdCode).collection('receipts');
+
+  /// Who is away lives in one settings document, apart from the records:
+  /// it is state rather than history, and closing a period must not
+  /// archive it.
+  DocumentReference<Map<String, dynamic>> _awayRef(String householdCode) =>
+      _budgetRef(householdCode).collection('settings').doc('away');
+
+  Stream<AwayBook> watchAway(String householdCode) => _awayRef(householdCode)
+      .snapshots()
+      .map((snapshot) => AwayBook.fromJson(snapshot.data()));
+
+  /// Asks to be counted out. Replaces any earlier request of [name]'s
+  /// whole, so the votes on a turned-down one do not carry over.
+  Future<void> requestAway(String householdCode, AwayRequest request) {
+    return _awayRef(householdCode).set(
+      {request.name: request.toJson()},
+      SetOptions(mergeFields: [
+        FieldPath([request.name])
+      ]),
+    );
+  }
+
+  /// An approver's answer, written to the one field so two answering at
+  /// once never overwrite each other.
+  Future<void> voteAway(
+    String householdCode,
+    String name,
+    String judge,
+    String vote,
+  ) {
+    return _awayRef(householdCode).update({
+      FieldPath([name, 'votes', judge]): vote
+    });
+  }
+
+  /// Back home, a request withdrawn, or a refusal seen: [name] is simply
+  /// home again.
+  Future<void> clearAway(String householdCode, String name) {
+    return _awayRef(householdCode).set(
+      {name: FieldValue.delete()},
+      SetOptions(merge: true),
+    );
+  }
 
   Stream<List<Expense>> watchExpenses(String householdCode) {
     return _expensesRef(householdCode)

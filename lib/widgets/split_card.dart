@@ -29,6 +29,9 @@ class SplitCard extends StatelessWidget {
   /// One of a pair who owe each other cancels the debts against each other.
   final ValueChanged<Offset> onOffset;
 
+  /// Flatmates away from the flat: marked, since new spending skips them.
+  final Set<String> away;
+
   const SplitCard({
     super.key,
     required this.pool,
@@ -38,6 +41,7 @@ class SplitCard extends StatelessWidget {
     required this.onPaid,
     required this.onConfirm,
     required this.onOffset,
+    this.away = const {},
   });
 
   Expense? _pendingFor(Settlement settlement) {
@@ -90,10 +94,23 @@ class SplitCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w600,
-                              color: ink,
+                              color: away.contains(person.name)
+                                  ? ink.withValues(alpha: 0.5)
+                                  : ink,
                             ),
                           ),
                         ),
+                        if (away.contains(person.name)) ...[
+                          const SizedBox(width: 4),
+                          const Tooltip(
+                            message: 'в отпуске',
+                            child: Icon(
+                              Icons.beach_access_rounded,
+                              size: 13,
+                              color: kPayColor,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

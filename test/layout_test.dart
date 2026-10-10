@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:expense_tracker/models/away.dart';
 import 'package:expense_tracker/models/currency.dart';
 import 'package:expense_tracker/models/expense.dart';
 import 'package:expense_tracker/models/expense_category.dart';
@@ -14,8 +15,10 @@ import 'package:expense_tracker/models/scanned_transaction.dart';
 import 'package:expense_tracker/models/shared_split.dart';
 import 'package:expense_tracker/models/transaction_type.dart';
 import 'package:expense_tracker/screens/camera_capture_screen.dart';
+import 'package:expense_tracker/screens/home_screen.dart';
 import 'package:expense_tracker/screens/name_picker_screen.dart';
 import 'package:expense_tracker/theme.dart';
+import 'package:expense_tracker/widgets/away_banner.dart';
 import 'package:expense_tracker/widgets/expense_tile.dart';
 import 'package:expense_tracker/widgets/fine_banner.dart';
 import 'package:expense_tracker/widgets/fine_sheet.dart';
@@ -229,6 +232,54 @@ void main() {
           keyboard: 300,
         );
         expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('the longest name with the away switch in the app bar',
+          (tester) async {
+        for (final status in AwayStatus.values) {
+          await _fit(
+            tester,
+            Column(
+              children: [
+                AppBar(
+                  title: HomeTitle(
+                    name: 'Мухаммад',
+                    away: status,
+                    onAway: () {},
+                  ),
+                  titleSpacing: 24,
+                  actions: [
+                    IconButton(
+                      onPressed: () {},
+                      icon: const Icon(Icons.history_rounded),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+              ],
+            ),
+            size: size,
+          );
+        }
+      });
+
+      testWidgets('an away request with its buttons', (tester) async {
+        await _fit(
+          tester,
+          SingleChildScrollView(
+            child: AwayBanner(
+              request: AwayRequest(
+                name: 'Мухаммад',
+                since: DateTime(2026, 10, 1),
+                approvers: const ['Азамат', 'Аслан', 'Имран'],
+              ),
+              myName: 'Азамат',
+              onVote: (_) {},
+              onDismiss: () {},
+            ),
+          ),
+          size: size,
+        );
       });
 
       testWidgets('the name picker', (tester) async {

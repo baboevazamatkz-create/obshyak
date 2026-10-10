@@ -12,9 +12,10 @@ const kOffenderDispute = 'dispute';
 
 enum FineStatus { voting, active, cancelled }
 
-/// Everyone who votes on [fine]: the flat minus the offender.
+/// Everyone who votes on [fine]: whoever was living in the flat when it
+/// was proposed, minus the offender.
 List<String> fineJudges(Expense fine) => [
-      for (final name in kRoommates)
+      for (final name in fine.sharers)
         if (name != fine.offender) name
     ];
 
@@ -35,11 +36,12 @@ FineStatus fineStatus(Expense fine) {
 /// decided.
 List<String> fineAwaiting(Expense fine) {
   if (fineStatus(fine) != FineStatus.voting) return const [];
+  final judges = fineJudges(fine);
   return [
     for (final name in kRoommates)
       if (name == fine.offender
           ? fine.offenderVote == null
-          : fine.votes[name] == null)
+          : judges.contains(name) && fine.votes[name] == null)
         name,
   ];
 }

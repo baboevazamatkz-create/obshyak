@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'currency.dart';
 import 'expense_category.dart';
+import 'shared_budget.dart';
 import 'transaction_type.dart';
 
 class Expense {
@@ -48,6 +49,11 @@ class Expense {
   /// Fine only: the offender's answer, null until they give one.
   final String? offenderVote;
 
+  /// Purchase and fine only: who lived in the flat when it was entered --
+  /// everyone not away -- and so shares it. Null for records made before
+  /// anyone could be away, which the whole flat shares.
+  final List<String>? members;
+
   const Expense({
     required this.id,
     required this.amount,
@@ -65,6 +71,7 @@ class Expense {
     this.offender,
     this.votes = const {},
     this.offenderVote,
+    this.members,
   });
 
   bool get isIncome => type == TransactionType.income;
@@ -73,13 +80,28 @@ class Expense {
   bool get isFine => type == TransactionType.fine;
   bool get isOffset => type == TransactionType.offset;
 
+  /// Who shares this purchase or fine, in [kRoommates] order.
+  List<String> get sharers {
+    final among = members;
+    if (among == null) return kRoommates;
+    return [
+      for (final name in kRoommates)
+        if (among.contains(name)) name,
+    ];
+  }
+
   /// What goes into the flat's split: the receipt minus the personal part.
   double get sharedAmount {
     final shared = amount - personal;
     return shared < 0 ? 0 : shared;
   }
 
-  Expense copyWith({String? author, String? receiptId}) => Expense(
+  Expense copyWith({
+    String? author,
+    String? receiptId,
+    List<String>? members,
+  }) =>
+      Expense(
         id: id,
         amount: amount,
         date: date,
@@ -96,6 +118,7 @@ class Expense {
         offender: offender,
         votes: votes,
         offenderVote: offenderVote,
+        members: members ?? this.members,
       );
 
   Map<String, dynamic> toJson() => {
@@ -116,6 +139,7 @@ class Expense {
         'offender': offender,
         'votes': votes,
         'offenderVote': offenderVote,
+        'members': members,
       };
 
   factory Expense.fromJson(Map<String, dynamic> json) => Expense(
@@ -140,5 +164,6 @@ class Expense {
             ) ??
             const {},
         offenderVote: json['offenderVote'] as String?,
+        members: (json['members'] as List?)?.cast<String>(),
       );
 }

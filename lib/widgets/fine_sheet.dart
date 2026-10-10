@@ -19,7 +19,16 @@ class FineSheet extends StatefulWidget {
   final String myName;
   final ValueChanged<Expense> onSubmit;
 
-  const FineSheet({super.key, required this.myName, required this.onSubmit});
+  /// Who lives in the flat now. Only they can be fined, and only they
+  /// decide: someone away is out of new fines entirely.
+  final List<String> members;
+
+  const FineSheet({
+    super.key,
+    required this.myName,
+    required this.onSubmit,
+    this.members = kRoommates,
+  });
 
   @override
   State<FineSheet> createState() => _FineSheetState();
@@ -69,6 +78,7 @@ class _FineSheetState extends State<FineSheet> {
       offender: _offender,
       votes: self ? const {} : {widget.myName: kVoteYes},
       offenderVote: self ? kOffenderAccept : null,
+      members: widget.members,
     ));
     Navigator.of(context).pop();
   }
@@ -99,7 +109,7 @@ class _FineSheetState extends State<FineSheet> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final name in kRoommates)
+                for (final name in widget.members)
                   ChoiceChip(
                     label: Text(name == widget.myName ? '$name (я)' : name),
                     selected: _offender == name,
