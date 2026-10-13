@@ -66,12 +66,17 @@ class AddExpenseSheet extends StatefulWidget {
   /// former should read "Изменить" and reuse the record's own id.
   final bool isDraft;
 
+  /// Whether to offer the "из них лично" field. A purchase typed in by
+  /// hand is for the flat only, so it goes without.
+  final bool askPersonal;
+
   const AddExpenseSheet({
     super.key,
     required this.type,
     required this.currency,
     this.existing,
     this.isDraft = false,
+    this.askPersonal = true,
     required this.onSubmit,
   });
 
@@ -305,7 +310,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                   if (_errorText != null) setState(() => _errorText = null);
                 },
               ),
-              if (widget.type == TransactionType.expense) ...[
+              if (widget.type == TransactionType.expense &&
+                  widget.askPersonal) ...[
                 SizedBox(height: _s(16)),
                 TextField(
                   controller: _personalController,

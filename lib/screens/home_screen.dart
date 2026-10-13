@@ -413,6 +413,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: AddExpenseSheet(
           type: TransactionType.expense,
           currency: kBudgetCurrency,
+          askPersonal: photo != null,
           onSubmit: (expense) async {
             if (photo == null) return _addExpense(expense);
             final receiptId = await _saveReceipt(photo);
