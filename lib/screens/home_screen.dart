@@ -401,9 +401,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return receiptId;
   }
 
-  /// The purchase form, for a receipt the scanner did not read, with that
-  /// receipt's photo kept on the record.
-  Future<void> _addByHand(Uint8List photo) async {
+  /// The purchase form: typed in with no receipt at all, or for a receipt
+  /// the scanner did not read, with that receipt's photo kept on the
+  /// record.
+  Future<void> _addByHand([Uint8List? photo]) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -413,6 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
           type: TransactionType.expense,
           currency: kBudgetCurrency,
           onSubmit: (expense) async {
+            if (photo == null) return _addExpense(expense);
             final receiptId = await _saveReceipt(photo);
             await _addExpense(expense.copyWith(receiptId: receiptId));
           },
@@ -622,7 +624,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// The one add button: a purchase always comes in through its receipt.
+  /// A purchase typed in by hand, for when there is no receipt to snap.
+  Widget _manualButton() {
+    return FloatingActionButton.small(
+      heroTag: 'add_by_hand',
+      backgroundColor: kChampagne.withValues(alpha: kFabFillOpacity),
+      onPressed: _addByHand,
+      tooltip: 'Добавить покупку вручную',
+      child: const Icon(Icons.edit_rounded, size: 20),
+    );
+  }
+
+  /// The main add button: a purchase through its receipt.
   Widget _scanButton(List<Expense> expenses) {
     return FloatingActionButton(
       heroTag: 'scan_receipt',
@@ -724,6 +737,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         _fineButton(),
                         const SizedBox(height: 14),
                       ],
+                      _manualButton(),
+                      const SizedBox(height: 14),
                       _scanButton(expenses),
                     ],
                   ),
