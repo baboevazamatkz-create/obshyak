@@ -72,14 +72,13 @@ class AddExpenseSheet extends StatefulWidget {
   /// hand is for the flat only, so it goes without.
   final bool askPersonal;
 
-  /// The admin's controls: who paid, and whom the purchase is split
-  /// between -- anyone, including a flatmate who is away. Without them the
-  /// payer is whoever enters it and the split is everyone home.
+  /// The admin's control over whom the purchase is split between --
+  /// anyone, including a flatmate who is away. Without it the split is
+  /// everyone home. Who paid is never asked: it is whoever entered it.
   final bool chooseShares;
 
-  /// Starting payer and split for a new purchase when [chooseShares] is
-  /// on; an edited one starts from its own.
-  final String? defaultPayer;
+  /// Starting split for a new purchase when [chooseShares] is on; an
+  /// edited one starts from its own.
   final List<String> defaultMembers;
 
   /// Flatmates away right now, faded in the split chips.
@@ -96,7 +95,6 @@ class AddExpenseSheet extends StatefulWidget {
     this.isDraft = false,
     this.askPersonal = true,
     this.chooseShares = false,
-    this.defaultPayer,
     this.defaultMembers = kRoommates,
     this.away = const {},
     this.onShowReceipt,
@@ -128,7 +126,6 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   String? _errorText;
 
   /// [AddExpenseSheet.chooseShares] only.
-  String? _payer;
   late Set<String> _members;
   String? _sharesError;
 
@@ -138,9 +135,6 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   void initState() {
     super.initState();
     final existing = widget.existing;
-    _payer = (existing != null && existing.author.isNotEmpty)
-        ? existing.author
-        : widget.defaultPayer;
     _members = {...(existing?.members ?? widget.defaultMembers)};
     if (existing != null) {
       final rawAmount = existing.amount == existing.amount.roundToDouble()
@@ -201,9 +195,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       }
       personal = parsed;
     }
-    if (widget.chooseShares && (_payer == null || _members.isEmpty)) {
-      setState(() => _sharesError =
-          _payer == null ? 'Выберите, кто платил' : 'Отметьте хотя бы одного');
+    if (widget.chooseShares && _members.isEmpty) {
+      setState(() => _sharesError = 'Отметьте хотя бы одного');
       return;
     }
 
@@ -220,7 +213,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         type: widget.type,
         // Editing keeps who entered the record and its receipt; the sheet
         // itself does not know either of them.
-        author: widget.chooseShares ? _payer! : (widget.existing?.author ?? ''),
+        author: widget.existing?.author ?? '',
         receiptId: widget.existing?.receiptId,
         personal: widget.type == TransactionType.expense ? personal : 0,
         members: widget.chooseShares
@@ -234,7 +227,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     Navigator.of(context).pop();
   }
 
-  /// Who paid, one of four; and whom it is split between, any of four.
+  /// Whom the purchase is split between, any of the four.
   List<Widget> _sharesControls(BuildContext context) {
     final label = microLabel(
       context,
@@ -251,25 +244,6 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
     return [
       SizedBox(height: _s(18)),
-      Text('КТО ПЛАТИЛ', style: label),
-      SizedBox(height: _s(8)),
-      Wrap(
-        spacing: _s(8),
-        runSpacing: _s(8),
-        children: [
-          for (final name in kRoommates)
-            ChoiceChip(
-              avatar: face(name),
-              label: Text(name),
-              selected: _payer == name,
-              onSelected: (_) => setState(() {
-                _payer = name;
-                touched();
-              }),
-            ),
-        ],
-      ),
-      SizedBox(height: _s(16)),
       Text('НА КОГО ДЕЛИТСЯ', style: label),
       SizedBox(height: _s(8)),
       Wrap(

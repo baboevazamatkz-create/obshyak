@@ -382,7 +382,6 @@ class _HomeScreenState extends State<HomeScreen> {
           currency: kBudgetCurrency,
           askPersonal: photo != null,
           chooseShares: _isAdmin,
-          defaultPayer: widget.myName,
           defaultMembers: _away.present,
           away: _away.awayNames,
           onSubmit: (expense) async {

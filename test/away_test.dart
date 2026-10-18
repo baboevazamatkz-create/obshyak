@@ -298,7 +298,7 @@ void main() {
     expect(tapped, 'Мухаммад');
   });
 
-  testWidgets('the admin edits who paid and who shares, away included',
+  testWidgets('the admin edits who shares a purchase, away included',
       (tester) async {
     Expense? saved;
     final original = buy('Азамат', 3000, members: home);
@@ -314,18 +314,18 @@ void main() {
         ),
       ),
     ));
-    expect(find.text('КТО ПЛАТИЛ'), findsOneWidget);
+    expect(find.text('НА КОГО ДЕЛИТСЯ'), findsOneWidget);
+    expect(find.text('КТО ПЛАТИЛ'), findsNothing);
 
-    // Put it on Имран as well, and say Аслан paid.
+    // Put it on Имран as well.
     await tester.tap(find.widgetWithText(FilterChip, 'Имран'));
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Аслан'));
     await tester.pump();
     await tester.ensureVisible(find.text('Сохранить'));
     await tester.tap(find.text('Сохранить'));
     await tester.pumpAndSettle();
 
     expect(saved!.id, original.id);
-    expect(saved!.author, 'Аслан');
+    expect(saved!.author, 'Азамат', reason: 'the payer never changes');
     expect(saved!.members, kRoommates);
     expect(saved!.amount, 3000);
   });
