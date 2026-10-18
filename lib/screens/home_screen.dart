@@ -20,7 +20,6 @@ import '../widgets/add_expense_sheet.dart';
 import '../widgets/ai_scan_icon.dart';
 import '../widgets/app_background_pattern.dart';
 import '../widgets/avatar.dart';
-import '../widgets/away_banner.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/fine_banner.dart';
 import '../widgets/fine_sheet.dart';
@@ -156,51 +155,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// The «Отпуск» button: ask to go away, withdraw the request, or come
-  /// back. Only going away needs the others to agree.
-  Future<void> _toggleAway() async {
-    final me = widget.myName;
-    switch (_away.statusOf(me)) {
-      case AwayStatus.away:
-        final sure = await _ask(
-          'Вернулись?',
-          'Новые покупки и штрафы снова будут делиться и на вас.',
-          'Да, вернулся',
-        );
-        if (sure) await _repository.clearAway(kSharedBudgetCode, me);
-      case AwayStatus.pending:
-        final sure = await _ask(
-          'Отменить запрос?',
-          'Запрос на отпуск ещё не согласован. Отменить его?',
-          'Отменить запрос',
-        );
-        if (sure) await _repository.clearAway(kSharedBudgetCode, me);
-      case AwayStatus.home:
-      case AwayStatus.rejected:
-        // The admin needs nobody's agreement, their own included.
-        final approvers = [
-          if (!_isAdmin)
-            for (final name in _away.present)
-              if (name != me) name,
-        ];
-        final sure = await _ask(
-          'Уезжаете?',
-          '${_isAdmin ? 'Без согласования.' : 'Остальные получат запрос и '
-                  'должны согласовать.'} Пока вы в отпуске, новые покупки и '
-              'штрафы на вас не делятся. Текущие долги остаются, их нужно '
-              'закрыть как обычно.',
-          _isAdmin ? 'В отпуск' : 'Попросить отпуск',
-        );
-        if (!sure) return;
-        await _repository.requestAway(
-          kSharedBudgetCode,
-          AwayRequest(name: me, since: DateTime.now(), approvers: approvers),
-        );
-    }
-  }
-
-  /// The admin sends a flatmate away, or brings them back, with nobody
-  /// to ask: an away request with no approvers is in force at once.
+  /// Only the admin sends a flatmate away or brings them back, by tapping
+  /// their name in the totals. Nobody is asked: an away request with no
+  /// approvers is in force at once.
   Future<void> _setAwayAsAdmin(String name) async {
     if (_away.isAway(name)) {
       final sure = await _ask(
@@ -221,25 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await _repository.requestAway(
       kSharedBudgetCode,
       AwayRequest(name: name, since: DateTime.now(), approvers: const []),
-    );
-  }
-
-  Future<void> _voteAway(AwayRequest request, String vote) async {
-    final yes = vote == kAwayYes;
-    final sure = await _ask(
-      yes ? 'Согласовать отпуск?' : 'Отклонить отпуск?',
-      yes
-          ? 'Когда согласуют все, новые покупки и штрафы перестанут '
-              'делиться на ${request.name}.'
-          : 'Одного «нет» достаточно, чтобы запрос не прошёл.',
-      yes ? 'Согласовать' : 'Отклонить',
-    );
-    if (!sure) return;
-    await _repository.voteAway(
-      kSharedBudgetCode,
-      request.name,
-      widget.myName,
-      vote,
     );
   }
 
@@ -728,10 +666,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             // Whose phone this is, where the app's name used to be.
-            title: HomeTitle(
-              name: widget.myName,
-              away: _away.statusOf(widget.myName),
-              onAway: _toggleAway,
+            title: Row(
+              children: [
+                Avatar(widget.myName, size: 30),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(widget.myName, overflow: TextOverflow.ellipsis),
+                ),
+              ],
             ),
             titleSpacing: 24,
             actions: [
@@ -825,23 +767,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                     },
                                     onPerson: _isAdmin ? _setAwayAsAdmin : null,
                                   ),
-                                  for (final request in _away.requests.values)
-                                    if (_away.statusOf(request.name) ==
-                                            AwayStatus.pending ||
-                                        (_away.statusOf(request.name) ==
-                                                AwayStatus.rejected &&
-                                            request.name == widget.myName))
-                                      AwayBanner(
-                                        request: request,
-                                        myName: widget.myName,
-                                        book: _away,
-                                        onVote: (vote) =>
-                                            _voteAway(request, vote),
-                                        onDismiss: () => _repository.clearAway(
-                                          kSharedBudgetCode,
-                                          widget.myName,
-                                        ),
-                                      ),
                                   for (final fine in expenses)
                                     if (fine.isFine &&
                                         fineStatus(fine) == FineStatus.voting)
@@ -893,34 +818,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-/// The app bar's title: whose phone this is, and their «Отпуск» switch
-/// right beside the name.
-class HomeTitle extends StatelessWidget {
-  final String name;
-  final AwayStatus away;
-  final VoidCallback onAway;
-
-  const HomeTitle({
-    super.key,
-    required this.name,
-    required this.away,
-    required this.onAway,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Avatar(name, size: 30),
-        const SizedBox(width: 10),
-        Flexible(child: Text(name, overflow: TextOverflow.ellipsis)),
-        const SizedBox(width: 10),
-        AwayButton(status: away, onPressed: onAway),
-      ],
     );
   }
 }

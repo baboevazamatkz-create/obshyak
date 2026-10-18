@@ -31,8 +31,8 @@ class ExpenseRepository {
       .snapshots()
       .map((snapshot) => AwayBook.fromJson(snapshot.data()));
 
-  /// Asks to be counted out. Replaces any earlier request of [name]'s
-  /// whole, so the votes on a turned-down one do not carry over.
+  /// Counts [request]'s flatmate out. Replaces any earlier entry of
+  /// theirs whole, so nothing of an older request carries over.
   Future<void> requestAway(String householdCode, AwayRequest request) {
     return _awayRef(householdCode).set(
       {request.name: request.toJson()},
@@ -42,21 +42,7 @@ class ExpenseRepository {
     );
   }
 
-  /// An approver's answer, written to the one field so two answering at
-  /// once never overwrite each other.
-  Future<void> voteAway(
-    String householdCode,
-    String name,
-    String judge,
-    String vote,
-  ) {
-    return _awayRef(householdCode).update({
-      FieldPath([name, 'votes', judge]): vote
-    });
-  }
-
-  /// Back home, a request withdrawn, or a refusal seen: [name] is simply
-  /// home again.
+  /// Back home: [name] is counted in again.
   Future<void> clearAway(String householdCode, String name) {
     return _awayRef(householdCode).set(
       {name: FieldValue.delete()},

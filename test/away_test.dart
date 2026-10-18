@@ -7,7 +7,6 @@ import 'package:expense_tracker/models/expense.dart';
 import 'package:expense_tracker/models/fines.dart';
 import 'package:expense_tracker/models/shared_split.dart';
 import 'package:expense_tracker/models/transaction_type.dart';
-import 'package:expense_tracker/widgets/away_banner.dart';
 import 'package:expense_tracker/widgets/fine_banner.dart';
 import 'package:expense_tracker/widgets/split_card.dart';
 
@@ -208,56 +207,6 @@ void main() {
     });
   });
 
-  testWidgets('an approver can agree or refuse; the one asking just waits',
-      (tester) async {
-    String? vote;
-    Widget banner(String me) => MaterialApp(
-          home: Scaffold(
-            body: AwayBanner(
-              request: request(),
-              myName: me,
-              book: AwayBook({'Имран': request()}),
-              onVote: (v) => vote = v,
-              onDismiss: () {},
-            ),
-          ),
-        );
-
-    await tester.pumpWidget(banner('Аслан'));
-    expect(find.text('Имран уезжает и просит отпуск'), findsOneWidget);
-    await tester.tap(find.text('Согласовать'));
-    expect(vote, kAwayYes);
-
-    await tester.pumpWidget(banner('Имран'));
-    expect(find.text('Согласовать'), findsNothing);
-    expect(find.text('Ждём: Азамат, Аслан, Мухаммад'), findsOneWidget);
-  });
-
-  testWidgets('someone away gets no vote on a request', (tester) async {
-    final book = AwayBook({
-      'Имран': request(),
-      'Аслан': AwayRequest(
-        name: 'Аслан',
-        since: _day,
-        approvers: const ['Азамат', 'Мухаммад'],
-        votes: const {'Азамат': kAwayYes, 'Мухаммад': kAwayYes},
-      ),
-    });
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: AwayBanner(
-          request: book.requests['Имран']!,
-          myName: 'Аслан',
-          book: book,
-          onVote: (_) {},
-          onDismiss: () {},
-        ),
-      ),
-    ));
-    expect(find.text('Согласовать'), findsNothing);
-    expect(find.text('Ждём: Азамат, Мухаммад'), findsOneWidget);
-  });
-
   testWidgets('names in the totals are tappable only for the admin',
       (tester) async {
     String? tapped;
@@ -289,18 +238,5 @@ void main() {
       'Аслан': AwayRequest(name: 'Аслан', since: _day, approvers: const []),
     });
     expect(book.isAway('Аслан'), isTrue);
-  });
-
-  testWidgets('the button shows where the flatmate stands', (tester) async {
-    for (final (status, label) in [
-      (AwayStatus.home, 'Отпуск'),
-      (AwayStatus.pending, 'Ждём'),
-      (AwayStatus.away, 'В отпуске'),
-    ]) {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: AwayButton(status: status, onPressed: () {})),
-      ));
-      expect(find.text(label), findsOneWidget);
-    }
   });
 }

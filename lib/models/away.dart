@@ -7,11 +7,12 @@ const kAwayNo = 'no';
 
 enum AwayStatus { home, pending, away, rejected }
 
-/// One flatmate's request to be counted out while they live elsewhere.
+/// One flatmate counted out while they live elsewhere.
 ///
-/// Going away needs the others' agreement: everyone who was home when it
-/// was asked must say yes, and a single no turns it down. Coming back
-/// needs nobody's: the request is simply removed.
+/// Only the admin sends someone away now, with no approvers, so it is in
+/// force at once; coming back removes it. Entries from when flatmates
+/// asked for themselves may still carry approvers and votes: everyone
+/// asked had to say yes, and a single no turned it down.
 class AwayRequest {
   final String name;
   final DateTime since;
