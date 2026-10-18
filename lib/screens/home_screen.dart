@@ -74,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Held in fields rather than created inside build(): a stream built during
   // build is a brand-new Firestore listener on every rebuild, which drops the
   // loaded data back to a spinner and re-reads the collection each time.
-  late Stream<List<Expense>> _expensesStream;
+  late Stream<({List<Expense> expenses, bool fromCache})> _expensesStream;
   late Stream<AwayBook> _awayStream;
 
   /// The latest word on who is away. New purchases and fines are stamped
@@ -104,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _expensesStream = _repository.watchExpenses(kSharedBudgetCode);
+    _expensesStream = _repository.watchExpensesWithSource(kSharedBudgetCode);
     _awayStream = _repository.watchAway(kSharedBudgetCode);
     _startFirstLoadTimer();
     // After the first frame, so the tour has the real screen to sit over.
@@ -132,7 +132,8 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Drops the stalled listener and opens a fresh one, which is the closest
   /// thing to "reconnect" a Firestore stream offers from here.
   void _retryFirstLoad() => setState(() {
-        _expensesStream = _repository.watchExpenses(kSharedBudgetCode);
+        _expensesStream =
+            _repository.watchExpensesWithSource(kSharedBudgetCode);
         _awayStream = _repository.watchAway(kSharedBudgetCode);
         _startFirstLoadTimer();
       });
@@ -662,16 +663,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildWithExpenses(BuildContext context) {
-    return StreamBuilder<List<Expense>>(
+    return StreamBuilder<({List<Expense> expenses, bool fromCache})>(
       stream: _expensesStream,
       builder: (context, snapshot) {
         // Only the open period is on this screen; settled ones live in
         // history.
         final expenses = [
-          for (final expense in snapshot.data ?? const <Expense>[])
+          for (final expense in snapshot.data?.expenses ?? const <Expense>[])
             if (expense.archivedAt == null) expense,
         ];
-        if (snapshot.hasData) {
+        // Shown from this phone's copy at once, but only acted on once the
+        // server has confirmed it: the copy can be behind.
+        if (snapshot.hasData && !snapshot.data!.fromCache) {
           _dropAwayJudges(expenses);
           _archiveIfSettled(expenses);
         }

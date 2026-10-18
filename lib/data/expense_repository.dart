@@ -50,12 +50,25 @@ class ExpenseRepository {
     );
   }
 
-  Stream<List<Expense>> watchExpenses(String householdCode) {
+  Stream<List<Expense>> watchExpenses(String householdCode) =>
+      watchExpensesWithSource(householdCode).map((feed) => feed.expenses);
+
+  /// The records, and whether they came from this phone's own copy rather
+  /// than the server. The local copy is what makes the app open with its
+  /// figures straight away; but it can be behind, so nothing is written on
+  /// the strength of it.
+  Stream<({List<Expense> expenses, bool fromCache})> watchExpensesWithSource(
+    String householdCode,
+  ) {
     return _expensesRef(householdCode)
         .orderBy('date', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => Expense.fromJson(doc.data())).toList());
+        .snapshots(includeMetadataChanges: true)
+        .map((snapshot) => (
+              expenses: [
+                for (final doc in snapshot.docs) Expense.fromJson(doc.data()),
+              ],
+              fromCache: snapshot.metadata.isFromCache,
+            ));
   }
 
   Future<void> addExpense(String householdCode, Expense expense) {

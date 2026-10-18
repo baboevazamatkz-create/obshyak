@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +37,13 @@ Future<void> connectToBudget({
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     ).timeout(timeout);
+    // Keeps a copy of the budget on the phone, so the app opens on the
+    // last known figures at once and catches up with the server after,
+    // instead of waiting on the network every time. Has to be set before
+    // anything touches Firestore. Where the browser cannot keep it (a
+    // private window, a second tab) Firestore falls back to memory.
+    FirebaseFirestore.instance.settings =
+        const Settings(persistenceEnabled: true);
     _firebaseStarted = true;
   }
   if (FirebaseAuth.instance.currentUser == null) {

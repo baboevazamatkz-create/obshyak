@@ -30,6 +30,46 @@
   <title>Общак</title>
   <link rel="manifest" href="manifest.json">
 
+  <!-- Startup is a chain: the page, then Flutter's loader, then the app,
+       and only once the app runs does it fetch Firebase and open a
+       connection. Everything below is fetched now, alongside the rest, so
+       each link of the chain finds its files already on the way. -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+  <!-- The Firebase SDK the app loads, at the version firebase_core_web
+       asks for; test/web_preload_test.dart fails if they ever differ. -->
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js" crossorigin>
+  <script>
+    // The app itself and the rendering engine, picked the way Flutter's
+    // loader picks them: the smaller Chromium build of the engine where
+    // the browser has what it needs, the full one elsewhere (Safari).
+    // Only on a deployed build, whose files carry the BUILD stamp.
+    (function () {
+      var BUILD = '__BUILD__';
+      if (BUILD.indexOf('__') === 0) return;
+      function preload(href, as, mod) {
+        var link = document.createElement('link');
+        link.rel = mod ? 'modulepreload' : 'preload';
+        if (!mod) link.as = as;
+        if (as === 'fetch') link.crossOrigin = 'anonymous';
+        link.href = href;
+        document.head.appendChild(link);
+      }
+      var blink = navigator.vendor === 'Google Inc.' ||
+          navigator.userAgent.indexOf('Edg/') >= 0;
+      var chromium = blink && typeof ImageDecoder !== 'undefined' &&
+          typeof Intl.v8BreakIterator !== 'undefined' &&
+          typeof Intl.Segmenter !== 'undefined';
+      var engine = chromium ? 'canvaskit/chromium/' : 'canvaskit/';
+      preload('main.dart.js?v=' + BUILD, 'script');
+      preload(engine + 'canvaskit.js', 'script', true);
+      preload(engine + 'canvaskit.wasm', 'fetch');
+    })();
+  </script>
+
   <style>
     html, body {
       margin: 0;

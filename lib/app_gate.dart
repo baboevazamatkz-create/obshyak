@@ -40,6 +40,9 @@ class _AppGateState extends State<AppGate> {
       _loading = true;
       _offline = false;
     });
+    // Read alongside connecting rather than after it: both are waits, and
+    // neither needs the other.
+    final name = NameStore.load();
     try {
       await widget.connect();
     } catch (error) {
@@ -52,10 +55,10 @@ class _AppGateState extends State<AppGate> {
       }
       return;
     }
-    final name = await NameStore.load();
+    final picked = await name;
     if (!mounted) return;
     setState(() {
-      _name = name;
+      _name = picked;
       _loading = false;
     });
   }
