@@ -16,6 +16,7 @@ import 'package:expense_tracker/models/transaction_type.dart';
 import 'package:expense_tracker/screens/camera_capture_screen.dart';
 import 'package:expense_tracker/screens/name_picker_screen.dart';
 import 'package:expense_tracker/theme.dart';
+import 'package:expense_tracker/widgets/add_expense_sheet.dart';
 import 'package:expense_tracker/widgets/expense_tile.dart';
 import 'package:expense_tracker/widgets/fine_banner.dart';
 import 'package:expense_tracker/widgets/fine_sheet.dart';
@@ -229,6 +230,25 @@ void main() {
           keyboard: 300,
         );
         expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('the admin\'s purchase editor, keyboard up', (tester) async {
+        await _fit(
+          tester,
+          GlassSheet(
+            child: AddExpenseSheet(
+              type: TransactionType.expense,
+              currency: AppCurrency.kzt,
+              existing: _buy('Мухаммад', 125000),
+              chooseShares: true,
+              away: const {'Имран'},
+              onShowReceipt: () {},
+              onSubmit: (_) {},
+            ),
+          ),
+          size: size,
+          keyboard: size.height * 0.4,
+        );
       });
 
       testWidgets('the name picker', (tester) async {

@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../models/currency.dart';
 import '../models/expense.dart';
 import '../models/fines.dart';
+import '../models/shared_budget.dart';
+import '../models/transaction_type.dart';
 import '../theme.dart';
 import 'glass.dart';
 
@@ -97,6 +99,13 @@ class ExpenseTile extends StatelessWidget {
       if (isIncome && expense.note.isNotEmpty) expense.note,
       if (expense.personal > 0)
         'личное ${currency.format.format(expense.personal)}',
+      // A purchase not split four ways says who sat it out.
+      if (expense.type == TransactionType.expense &&
+          expense.sharers.length < kRoommates.length)
+        'без ${[
+          for (final n in kRoommates)
+            if (!expense.sharers.contains(n)) n
+        ].join(', ')}',
       if (expense.receiptId != null) 'чек',
     ].join(' · ');
     final sign = isTransfer || expense.isFine || expense.isOffset

@@ -380,11 +380,40 @@ class _HomeScreenState extends State<HomeScreen> {
           type: TransactionType.expense,
           currency: kBudgetCurrency,
           askPersonal: photo != null,
+          chooseShares: _isAdmin,
+          defaultPayer: widget.myName,
+          defaultMembers: _away.present,
+          away: _away.awayNames,
           onSubmit: (expense) async {
             if (photo == null) return _addExpense(expense);
             final receiptId = await _saveReceipt(photo);
             await _addExpense(expense.copyWith(receiptId: receiptId));
           },
+        ),
+      ),
+    );
+  }
+
+  /// The admin corrects a purchase: its figures, who paid, and whom it is
+  /// split between, a flatmate away included. Written back over the same
+  /// record, so the totals follow at once.
+  Future<void> _editPurchase(Expense purchase) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => GlassSheet(
+        child: AddExpenseSheet(
+          type: TransactionType.expense,
+          currency: kBudgetCurrency,
+          existing: purchase,
+          chooseShares: true,
+          away: _away.awayNames,
+          onShowReceipt: purchase.receiptId == null
+              ? null
+              : () => _showReceipt(purchase.receiptId!),
+          onSubmit: (edited) =>
+              _repository.addExpense(kSharedBudgetCode, edited),
         ),
       ),
     );
@@ -533,16 +562,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return monthChanged ? _monthDivider(next) : const SizedBox(height: 7);
   }
 
-  /// The tap-for-receipt row, which only the admin can swipe away.
+  /// A row: a tap opens its receipt, or for the admin edits a purchase;
+  /// only the admin can swipe one away.
   Widget _buildExpenseRow(Expense expense) {
+    // Only the admin edits, and only purchases; for everyone else a tap
+    // opens the receipt.
+    final editable = _isAdmin && expense.type == TransactionType.expense;
     final tile = ExpenseTile(
       expense: expense,
       currency: kBudgetCurrency,
-      onTap: expense.receiptId == null
-          ? null
-          : () => _showReceipt(expense.receiptId!),
-      // Saved records are not edited: a mistake is deleted and entered
-      // again, so nobody's figures change under them unnoticed.
+      onTap: editable
+          ? () => _editPurchase(expense)
+          : expense.receiptId == null
+              ? null
+              : () => _showReceipt(expense.receiptId!),
     );
     if (!_isAdmin) return tile;
     return Dismissible(

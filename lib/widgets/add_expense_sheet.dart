@@ -4,9 +4,11 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/currency.dart';
+import '../models/shared_budget.dart';
 import '../models/expense.dart';
 import '../models/transaction_type.dart';
 import '../theme.dart';
+import 'avatar.dart';
 import 'currency_symbol_icon.dart';
 
 final _dateFormat = DateFormat('d MMMM y', 'ru');
@@ -70,6 +72,22 @@ class AddExpenseSheet extends StatefulWidget {
   /// hand is for the flat only, so it goes without.
   final bool askPersonal;
 
+  /// The admin's controls: who paid, and whom the purchase is split
+  /// between -- anyone, including a flatmate who is away. Without them the
+  /// payer is whoever enters it and the split is everyone home.
+  final bool chooseShares;
+
+  /// Starting payer and split for a new purchase when [chooseShares] is
+  /// on; an edited one starts from its own.
+  final String? defaultPayer;
+  final List<String> defaultMembers;
+
+  /// Flatmates away right now, faded in the split chips.
+  final Set<String> away;
+
+  /// Opens the receipt photo of the purchase being edited.
+  final VoidCallback? onShowReceipt;
+
   const AddExpenseSheet({
     super.key,
     required this.type,
@@ -77,6 +95,11 @@ class AddExpenseSheet extends StatefulWidget {
     this.existing,
     this.isDraft = false,
     this.askPersonal = true,
+    this.chooseShares = false,
+    this.defaultPayer,
+    this.defaultMembers = kRoommates,
+    this.away = const {},
+    this.onShowReceipt,
     required this.onSubmit,
   });
 
@@ -104,12 +127,21 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   DateTime _selectedDate = DateTime.now();
   String? _errorText;
 
+  /// [AddExpenseSheet.chooseShares] only.
+  String? _payer;
+  late Set<String> _members;
+  String? _sharesError;
+
   bool get _isEditing => widget.existing != null && !widget.isDraft;
 
   @override
   void initState() {
     super.initState();
     final existing = widget.existing;
+    _payer = (existing != null && existing.author.isNotEmpty)
+        ? existing.author
+        : widget.defaultPayer;
+    _members = {...(existing?.members ?? widget.defaultMembers)};
     if (existing != null) {
       final rawAmount = existing.amount == existing.amount.roundToDouble()
           ? existing.amount.toInt().toString()
@@ -169,6 +201,11 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       }
       personal = parsed;
     }
+    if (widget.chooseShares && (_payer == null || _members.isEmpty)) {
+      setState(() => _sharesError =
+          _payer == null ? 'Выберите, кто платил' : 'Отметьте хотя бы одного');
+      return;
+    }
 
     widget.onSubmit(
       Expense(
@@ -183,12 +220,83 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         type: widget.type,
         // Editing keeps who entered the record and its receipt; the sheet
         // itself does not know either of them.
-        author: widget.existing?.author ?? '',
+        author: widget.chooseShares ? _payer! : (widget.existing?.author ?? ''),
         receiptId: widget.existing?.receiptId,
         personal: widget.type == TransactionType.expense ? personal : 0,
+        members: widget.chooseShares
+            ? [
+                for (final name in kRoommates)
+                  if (_members.contains(name)) name,
+              ]
+            : widget.existing?.members,
       ),
     );
     Navigator.of(context).pop();
+  }
+
+  /// Who paid, one of four; and whom it is split between, any of four.
+  List<Widget> _sharesControls(BuildContext context) {
+    final label = microLabel(
+      context,
+      size: _s(10.5),
+      color: accentForeground(context).withValues(alpha: 0.6),
+    );
+    Widget face(String name) => Opacity(
+          opacity: widget.away.contains(name) ? 0.4 : 1,
+          child: Avatar(name, size: _s(22)),
+        );
+    void touched() {
+      if (_sharesError != null) _sharesError = null;
+    }
+
+    return [
+      SizedBox(height: _s(18)),
+      Text('КТО ПЛАТИЛ', style: label),
+      SizedBox(height: _s(8)),
+      Wrap(
+        spacing: _s(8),
+        runSpacing: _s(8),
+        children: [
+          for (final name in kRoommates)
+            ChoiceChip(
+              avatar: face(name),
+              label: Text(name),
+              selected: _payer == name,
+              onSelected: (_) => setState(() {
+                _payer = name;
+                touched();
+              }),
+            ),
+        ],
+      ),
+      SizedBox(height: _s(16)),
+      Text('НА КОГО ДЕЛИТСЯ', style: label),
+      SizedBox(height: _s(8)),
+      Wrap(
+        spacing: _s(8),
+        runSpacing: _s(8),
+        children: [
+          for (final name in kRoommates)
+            FilterChip(
+              avatar: face(name),
+              label: Text(name),
+              selected: _members.contains(name),
+              showCheckmark: false,
+              onSelected: (on) => setState(() {
+                on ? _members.add(name) : _members.remove(name);
+                touched();
+              }),
+            ),
+        ],
+      ),
+      if (_sharesError != null) ...[
+        SizedBox(height: _s(8)),
+        Text(
+          _sharesError!,
+          style: TextStyle(color: expenseColor(context), fontSize: _s(13)),
+        ),
+      ],
+    ];
   }
 
   @override
@@ -379,6 +487,15 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                   ),
                 ),
               ),
+              if (widget.chooseShares) ..._sharesControls(context),
+              if (widget.onShowReceipt != null) ...[
+                SizedBox(height: _s(10)),
+                TextButton.icon(
+                  onPressed: widget.onShowReceipt,
+                  icon: Icon(Icons.receipt_long_rounded, size: _s(18)),
+                  label: const Text('Открыть чек'),
+                ),
+              ],
               SizedBox(height: _s(24)),
               SizedBox(
                 width: double.infinity,
