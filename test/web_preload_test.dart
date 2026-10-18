@@ -3,12 +3,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// web/index.html starts fetching the Firebase SDK before the app runs.
-/// If firebase_core_web moves to another SDK version and the page does
-/// not, the app would load both: the head start turns into a second
-/// download. This keeps the two in step.
+/// web/index.html loads the Firebase SDK from the site's own copy before
+/// the app runs. If firebase_core_web moves to another SDK version and the
+/// copy does not, the app would run against an SDK it was not built for.
+/// This keeps the two in step: run tool/vendor_firebase.sh on an update.
 void main() {
-  test('the page preloads the Firebase SDK version the app loads', () {
+  test('the page loads the Firebase SDK version the app expects', () {
     final config = jsonDecode(
       File('.dart_tool/package_config.json').readAsStringSync(),
     ) as Map<String, dynamic>;
@@ -31,10 +31,17 @@ void main() {
         .group(1)!;
 
     final page = File('web/index.html').readAsStringSync();
-    final preloaded = RegExp(r'firebasejs/([0-9.]+)/')
+    final loaded = RegExp(r'\./firebase/([0-9.]+)/')
         .allMatches(page)
         .map((m) => m.group(1))
         .toSet();
-    expect(preloaded, {version});
+    expect(loaded, {version});
+    for (final name in ['app', 'auth', 'firestore']) {
+      final file = File('web/firebase/$version/firebase-$name.js');
+      expect(file.existsSync(), isTrue, reason: file.path);
+      expect(file.readAsStringSync(), isNot(contains('gstatic.com')),
+          reason: '${file.path} must import its neighbours, not the CDN');
+    }
+    expect(page, isNot(contains('gstatic.com/firebasejs')));
   });
 }

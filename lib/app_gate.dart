@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'data/budget_cache.dart';
 import 'data/name_store.dart';
+import 'models/away.dart';
+import 'models/expense.dart';
 import 'screens/home_screen.dart';
 import 'screens/name_picker_screen.dart';
 import 'theme.dart';
@@ -9,6 +12,10 @@ import 'widgets/orbit_loader.dart';
 
 /// Decides what the app opens on: the name picker until this phone has
 /// been given a flatmate's name, then the shared budget.
+///
+/// Neither waits for the connection. The budget opens on the figures this
+/// phone saw last while Firebase starts alongside; only if connecting
+/// fails does the gate step in with a retry.
 class AppGate extends StatefulWidget {
   /// Connects to the shared budget. Injectable so a test can stand in a
   /// connection that works or one that fails.
@@ -22,6 +29,7 @@ class AppGate extends StatefulWidget {
 
 class _AppGateState extends State<AppGate> {
   String? _name;
+  ({List<Expense> expenses, AwayBook away})? _cached;
   bool _loading = true;
   bool _offline = false;
 
@@ -32,35 +40,35 @@ class _AppGateState extends State<AppGate> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _connect();
+    _loadLocal();
   }
 
-  Future<void> _load() async {
+  /// What this phone already knows: whose it is, and the budget as last
+  /// seen. Both are local reads, done in moments.
+  Future<void> _loadLocal() async {
+    final name = await NameStore.load();
+    final cached = name == null ? null : await BudgetCache.load();
+    if (!mounted) return;
     setState(() {
-      _loading = true;
-      _offline = false;
+      _name = name;
+      _cached = cached;
+      _loading = false;
     });
-    // Read alongside connecting rather than after it: both are waits, and
-    // neither needs the other.
-    final name = NameStore.load();
+  }
+
+  Future<void> _connect() async {
+    if (_offline) setState(() => _offline = false);
     try {
       await widget.connect();
     } catch (error) {
       if (mounted) {
         setState(() {
-          _loading = false;
           _offline = true;
           _reason = error.toString();
         });
       }
-      return;
     }
-    final picked = await name;
-    if (!mounted) return;
-    setState(() {
-      _name = picked;
-      _loading = false;
-    });
   }
 
   Future<void> _pick(String name) async {
@@ -71,15 +79,6 @@ class _AppGateState extends State<AppGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      // The first screen of the app, so it wears the same room as the rest
-      // of it rather than a bare Material spinner on white.
-      return const Scaffold(
-        body: AppBackgroundPattern(
-          child: Center(child: OrbitLoader()),
-        ),
-      );
-    }
     if (_offline) {
       return Scaffold(
         body: AppBackgroundPattern(
@@ -99,7 +98,7 @@ class _AppGateState extends State<AppGate> {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: _load,
+                    onPressed: _connect,
                     child: const Text('Повторить'),
                   ),
                   if (_reason != null) ...[
@@ -123,10 +122,18 @@ class _AppGateState extends State<AppGate> {
         ),
       );
     }
+    if (_loading) {
+      // Only for the moment the local reads take.
+      return const Scaffold(
+        body: AppBackgroundPattern(
+          child: Center(child: OrbitLoader()),
+        ),
+      );
+    }
     final name = _name;
     if (name == null) {
       return NamePickerScreen(onPicked: _pick);
     }
-    return HomeScreen(myName: name);
+    return HomeScreen(myName: name, cached: _cached);
   }
 }

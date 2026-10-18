@@ -6,9 +6,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/away.dart';
 import '../models/expense.dart';
 import '../models/fines.dart';
+import 'connection.dart';
 
+/// Every read and write waits for [Connection.ready] first, so screens can
+/// open, and even be used, before Firebase has started: a stream starts
+/// delivering once connected, and a write goes out then.
 class ExpenseRepository {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+
+  static Stream<T> _whenReady<T>(Stream<T> Function() open) =>
+      Stream.fromFuture(Connection.ready).asyncExpand((_) => open());
 
   DocumentReference<Map<String, dynamic>> _budgetRef(String householdCode) =>
       _firestore.collection('households').doc(householdCode);
@@ -27,13 +34,15 @@ class ExpenseRepository {
   DocumentReference<Map<String, dynamic>> _awayRef(String householdCode) =>
       _budgetRef(householdCode).collection('settings').doc('away');
 
-  Stream<AwayBook> watchAway(String householdCode) => _awayRef(householdCode)
-      .snapshots()
-      .map((snapshot) => AwayBook.fromJson(snapshot.data()));
+  Stream<AwayBook> watchAway(String householdCode) =>
+      _whenReady(() => _awayRef(householdCode)
+          .snapshots()
+          .map((snapshot) => AwayBook.fromJson(snapshot.data())));
 
   /// Counts [request]'s flatmate out. Replaces any earlier entry of
   /// theirs whole, so nothing of an older request carries over.
-  Future<void> requestAway(String householdCode, AwayRequest request) {
+  Future<void> requestAway(String householdCode, AwayRequest request) async {
+    await Connection.ready;
     return _awayRef(householdCode).set(
       {request.name: request.toJson()},
       SetOptions(mergeFields: [
@@ -43,7 +52,8 @@ class ExpenseRepository {
   }
 
   /// Back home: [name] is counted in again.
-  Future<void> clearAway(String householdCode, String name) {
+  Future<void> clearAway(String householdCode, String name) async {
+    await Connection.ready;
     return _awayRef(householdCode).set(
       {name: FieldValue.delete()},
       SetOptions(merge: true),
@@ -60,7 +70,7 @@ class ExpenseRepository {
   Stream<({List<Expense> expenses, bool fromCache})> watchExpensesWithSource(
     String householdCode,
   ) {
-    return _expensesRef(householdCode)
+    return _whenReady(() => _expensesRef(householdCode)
         .orderBy('date', descending: true)
         .snapshots(includeMetadataChanges: true)
         .map((snapshot) => (
@@ -68,10 +78,11 @@ class ExpenseRepository {
                 for (final doc in snapshot.docs) Expense.fromJson(doc.data()),
               ],
               fromCache: snapshot.metadata.isFromCache,
-            ));
+            )));
   }
 
-  Future<void> addExpense(String householdCode, Expense expense) {
+  Future<void> addExpense(String householdCode, Expense expense) async {
+    await Connection.ready;
     return _expensesRef(householdCode).doc(expense.id).set(expense.toJson());
   }
 
@@ -81,7 +92,8 @@ class ExpenseRepository {
   /// dozen rows off a single screenshot, and a batch is both one round
   /// trip and all-or-nothing -- a half-entered statement would be worse
   /// than none of it.
-  Future<void> addExpenses(String householdCode, List<Expense> expenses) {
+  Future<void> addExpenses(String householdCode, List<Expense> expenses) async {
+    await Connection.ready;
     if (expenses.isEmpty) return Future.value();
     final batch = _firestore.batch();
     final ref = _expensesRef(householdCode);
@@ -91,7 +103,8 @@ class ExpenseRepository {
     return batch.commit();
   }
 
-  Future<void> deleteExpense(String householdCode, String expenseId) {
+  Future<void> deleteExpense(String householdCode, String expenseId) async {
+    await Connection.ready;
     return _expensesRef(householdCode).doc(expenseId).delete();
   }
 
@@ -101,7 +114,8 @@ class ExpenseRepository {
     String householdCode,
     String receiptId,
     Uint8List jpeg,
-  ) {
+  ) async {
+    await Connection.ready;
     return _receiptsRef(householdCode).doc(receiptId).set({
       'data': base64Encode(jpeg),
       'createdAt': FieldValue.serverTimestamp(),
@@ -112,6 +126,7 @@ class ExpenseRepository {
   /// budget was cleared.
   Future<Uint8List?> fetchReceipt(
       String householdCode, String receiptId) async {
+    await Connection.ready;
     final snapshot = await _receiptsRef(householdCode).doc(receiptId).get();
     final data = snapshot.data()?['data'] as String?;
     return data == null ? null : base64Decode(data);
@@ -119,7 +134,8 @@ class ExpenseRepository {
 
   /// The recipient's word that a transfer arrived; from here on it moves
   /// balances.
-  Future<void> confirmTransfer(String householdCode, String expenseId) {
+  Future<void> confirmTransfer(String householdCode, String expenseId) async {
+    await Connection.ready;
     return _expensesRef(householdCode)
         .doc(expenseId)
         .update({'confirmed': true});
@@ -132,7 +148,8 @@ class ExpenseRepository {
     String fineId,
     String judge,
     String vote,
-  ) {
+  ) async {
+    await Connection.ready;
     return _expensesRef(householdCode).doc(fineId).update({
       FieldPath(['votes', judge]): vote
     });
@@ -144,13 +161,16 @@ class ExpenseRepository {
     String householdCode,
     String fineId,
     List<String> members,
-  ) {
+  ) async {
+    await Connection.ready;
     return _expensesRef(householdCode).doc(fineId).update({'members': members});
   }
 
   /// The offender's answer. A dispute also clears the judges' votes, so
   /// the fine only stands if they all confirm it again.
-  Future<void> answerFine(String householdCode, String fineId, String answer) {
+  Future<void> answerFine(
+      String householdCode, String fineId, String answer) async {
+    await Connection.ready;
     return _expensesRef(householdCode).doc(fineId).update({
       'offenderVote': answer,
       if (answer == kOffenderDispute) 'votes': <String, String>{},
@@ -165,6 +185,7 @@ class ExpenseRepository {
     List<String> expenseIds,
     DateTime at,
   ) async {
+    await Connection.ready;
     const chunkSize = 500;
     final ref = _expensesRef(householdCode);
     for (var i = 0; i < expenseIds.length; i += chunkSize) {
@@ -180,6 +201,7 @@ class ExpenseRepository {
   /// than 500 writes, so a budget that has been running for a while is
   /// cleared in chunks.
   Future<void> clearAll(String householdCode) async {
+    await Connection.ready;
     final snapshot = await _expensesRef(householdCode).get();
     const chunkSize = 500;
     for (var i = 0; i < snapshot.docs.length; i += chunkSize) {

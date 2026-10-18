@@ -34,14 +34,36 @@
        and only once the app runs does it fetch Firebase and open a
        connection. Everything below is fetched now, alongside the rest, so
        each link of the chain finds its files already on the way. -->
-  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
-  <!-- The Firebase SDK the app loads, at the version firebase_core_web
-       asks for; test/web_preload_test.dart fails if they ever differ. -->
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js" crossorigin>
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js" crossorigin>
-  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js" crossorigin>
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <!-- The Firebase SDK, served from this site (tool/vendor_firebase.sh)
+       rather than gstatic.com, and started now rather than once the app
+       asks for it. firebase_core_web finds it on window and loads nothing
+       itself; flutter_bootstrap.js starts the app once it is there. The
+       version must be the one firebase_core_web expects, which
+       test/web_preload_test.dart checks. -->
+  <script type="module">
+    import * as core from './firebase/11.9.1/firebase-app.js';
+    import * as auth from './firebase/11.9.1/firebase-auth.js';
+    import * as firestore from './firebase/11.9.1/firebase-firestore.js';
+    window.firebase_core = core;
+    // Without the popup/redirect helper: the app only ever signs in
+    // anonymously, and given the helper, Firebase Auth loads Google's
+    // sign-in iframe and script on every start in Safari and on phones
+    // -- several round trips to two more hosts before anything shows.
+    //
+    // And the sign-in is kept in localStorage rather than IndexedDB: it is
+    // one small record, and IndexedDB's slow transactions held up every
+    // start. (A phone signed in before this signs in afresh once; an
+    // anonymous sign-in carries nothing the app needs to keep.)
+    window.firebase_auth = Object.assign({}, auth, {
+      browserPopupRedirectResolver: undefined,
+      indexedDBLocalPersistence: auth.browserLocalPersistence,
+    });
+    window.firebase_firestore = firestore;
+    window.dispatchEvent(new Event('firebase-ready'));
+  </script>
   <script>
     // The app itself and the rendering engine, picked the way Flutter's
     // loader picks them: the smaller Chromium build of the engine where

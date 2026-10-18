@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import '../data/budget_cache.dart';
 import '../data/expense_repository.dart';
 import '../data/scan_service.dart';
 import '../models/away.dart';
@@ -54,7 +55,10 @@ class HomeScreen extends StatefulWidget {
   /// The flatmate using this phone. Written into every record they add.
   final String myName;
 
-  const HomeScreen({super.key, required this.myName});
+  /// The budget as this phone last saw it, shown until the server answers.
+  final ({List<Expense> expenses, AwayBook away})? cached;
+
+  const HomeScreen({super.key, required this.myName, this.cached});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -79,7 +83,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// The latest word on who is away. New purchases and fines are stamped
   /// with who is home at the moment they are entered.
-  AwayBook _away = AwayBook();
+  late AwayBook _away = widget.cached?.away ?? AwayBook();
+
+  /// The last server answer written to [BudgetCache], so a rebuild does not
+  /// write the same thing again.
+  Object? _cachedFrom;
 
   /// Fines whose judges are being narrowed right now, so one snapshot does
   /// not send the same write twice.
@@ -661,8 +669,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildWithExpenses(BuildContext context) {
+    final cached = widget.cached;
     return StreamBuilder<({List<Expense> expenses, bool fromCache})>(
       stream: _expensesStream,
+      // The last known figures, flagged as not from the server: shown at
+      // once, acted on never.
+      initialData:
+          cached == null ? null : (expenses: cached.expenses, fromCache: true),
       builder: (context, snapshot) {
         // Only the open period is on this screen; settled ones live in
         // history.
@@ -672,9 +685,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ];
         // Shown from this phone's copy at once, but only acted on once the
         // server has confirmed it: the copy can be behind.
-        if (snapshot.hasData && !snapshot.data!.fromCache) {
+        final live = snapshot.hasData && !snapshot.data!.fromCache;
+        if (live) {
           _dropAwayJudges(expenses);
           _archiveIfSettled(expenses);
+          if (!identical(_cachedFrom, snapshot.data)) {
+            _cachedFrom = snapshot.data;
+            BudgetCache.save(expenses, _away);
+          }
         }
         // Real data arrived -- the wait that timer was guarding against is
         // over, so it should not fire a stale "no connection" state later.
@@ -711,6 +729,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             titleSpacing: 24,
             actions: [
+              // Still on the figures saved on the phone: a still icon, not
+              // a spinner, so nothing is redrawn while Firebase connects.
+              if (snapshot.hasData && !live)
+                Tooltip(
+                  message: 'Обновляется',
+                  child: Icon(
+                    Icons.cloud_sync_outlined,
+                    size: 18,
+                    color: accentForeground(context).withValues(alpha: 0.45),
+                  ),
+                ),
               IconButton(
                 onPressed: _openHistory,
                 icon: const Icon(Icons.history_rounded),

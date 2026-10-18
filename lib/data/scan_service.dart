@@ -8,6 +8,7 @@ import 'package:image/image.dart' as img;
 
 import '../models/currency.dart';
 import '../models/scanned_transaction.dart';
+import 'connection.dart';
 
 /// A snapshot on its way to the scanner.
 class ScanImage {
@@ -60,8 +61,10 @@ class ScanService {
         _token = token ?? _firebaseToken,
         _endpoint = endpoint ?? ScanService.endpoint;
 
-  static Future<String?> _firebaseToken() =>
-      FirebaseAuth.instance.currentUser?.getIdToken() ?? Future.value(null);
+  static Future<String?> _firebaseToken() async {
+    await Connection.ready;
+    return FirebaseAuth.instance.currentUser?.getIdToken();
+  }
 
   Future<ScanResult> scan({
     required List<ScanImage> images,

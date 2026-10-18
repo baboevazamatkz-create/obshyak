@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -7,15 +6,16 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'app_gate.dart';
+import 'data/connection.dart';
 import 'firebase_options.dart';
 import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ru');
-  // Connecting happens inside the app, not before it starts: if it fails
-  // on a bad connection or a browser that blocks it, the app can say so
-  // and offer a retry instead of sitting on the loading screen for good.
+  // Connecting happens inside the app, alongside its first screens rather
+  // than before them: if it fails on a bad connection or a browser that
+  // blocks it, the app can say so and offer a retry.
   runApp(const ExpenseTrackerApp());
 }
 
@@ -37,18 +37,12 @@ Future<void> connectToBudget({
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     ).timeout(timeout);
-    // Keeps a copy of the budget on the phone, so the app opens on the
-    // last known figures at once and catches up with the server after,
-    // instead of waiting on the network every time. Has to be set before
-    // anything touches Firestore. Where the browser cannot keep it (a
-    // private window, a second tab) Firestore falls back to memory.
-    FirebaseFirestore.instance.settings =
-        const Settings(persistenceEnabled: true);
     _firebaseStarted = true;
   }
   if (FirebaseAuth.instance.currentUser == null) {
     await FirebaseAuth.instance.signInAnonymously().timeout(timeout);
   }
+  Connection.markReady();
 }
 
 class ExpenseTrackerApp extends StatelessWidget {
