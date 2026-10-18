@@ -9,6 +9,7 @@ import 'package:expense_tracker/models/shared_split.dart';
 import 'package:expense_tracker/models/transaction_type.dart';
 import 'package:expense_tracker/widgets/away_banner.dart';
 import 'package:expense_tracker/widgets/fine_banner.dart';
+import 'package:expense_tracker/widgets/split_card.dart';
 
 final _day = DateTime(2026, 10, 1);
 var _id = 0;
@@ -255,6 +256,39 @@ void main() {
     ));
     expect(find.text('Согласовать'), findsNothing);
     expect(find.text('Ждём: Азамат, Мухаммад'), findsOneWidget);
+  });
+
+  testWidgets('names in the totals are tappable only for the admin',
+      (tester) async {
+    String? tapped;
+    Widget card({ValueChanged<String>? onPerson}) => MaterialApp(
+          home: Scaffold(
+            body: SplitCard(
+              pool: sharedPool([buy('Азамат', 4000)]),
+              currency: AppCurrency.kzt,
+              myName: 'Азамат',
+              pending: const [],
+              onPaid: (_) {},
+              onConfirm: (_) {},
+              onOffset: (_) {},
+              onPerson: onPerson,
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(card());
+    expect(find.byType(InkWell), findsNothing);
+
+    await tester.pumpWidget(card(onPerson: (name) => tapped = name));
+    await tester.tap(find.text('Мухаммад').first);
+    expect(tapped, 'Мухаммад');
+  });
+
+  test('a request with no approvers, as the admin sends one, is in force', () {
+    final book = AwayBook({
+      'Аслан': AwayRequest(name: 'Аслан', since: _day, approvers: const []),
+    });
+    expect(book.isAway('Аслан'), isTrue);
   });
 
   testWidgets('the button shows where the flatmate stands', (tester) async {

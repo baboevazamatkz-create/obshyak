@@ -177,16 +177,19 @@ class _HomeScreenState extends State<HomeScreen> {
         if (sure) await _repository.clearAway(kSharedBudgetCode, me);
       case AwayStatus.home:
       case AwayStatus.rejected:
+        // The admin needs nobody's agreement, their own included.
         final approvers = [
-          for (final name in _away.present)
-            if (name != me) name,
+          if (!_isAdmin)
+            for (final name in _away.present)
+              if (name != me) name,
         ];
         final sure = await _ask(
           'Уезжаете?',
-          'Остальные получат запрос и должны согласовать. Пока вы в '
-              'отпуске, новые покупки и штрафы на вас не делятся. Текущие '
-              'долги остаются, их нужно закрыть как обычно.',
-          'Попросить отпуск',
+          '${_isAdmin ? 'Без согласования.' : 'Остальные получат запрос и '
+                  'должны согласовать.'} Пока вы в отпуске, новые покупки и '
+              'штрафы на вас не делятся. Текущие долги остаются, их нужно '
+              'закрыть как обычно.',
+          _isAdmin ? 'В отпуск' : 'Попросить отпуск',
         );
         if (!sure) return;
         await _repository.requestAway(
@@ -194,6 +197,31 @@ class _HomeScreenState extends State<HomeScreen> {
           AwayRequest(name: me, since: DateTime.now(), approvers: approvers),
         );
     }
+  }
+
+  /// The admin sends a flatmate away, or brings them back, with nobody
+  /// to ask: an away request with no approvers is in force at once.
+  Future<void> _setAwayAsAdmin(String name) async {
+    if (_away.isAway(name)) {
+      final sure = await _ask(
+        'Вернуть $name?',
+        'Новые покупки и штрафы снова будут делиться и на $name.',
+        'Вернуть',
+      );
+      if (sure) await _repository.clearAway(kSharedBudgetCode, name);
+      return;
+    }
+    final sure = await _ask(
+      'Отправить $name в отпуск?',
+      'Без согласования. Новые покупки и штрафы перестанут делиться на '
+          '$name, текущие долги останутся.',
+      'В отпуск',
+    );
+    if (!sure) return;
+    await _repository.requestAway(
+      kSharedBudgetCode,
+      AwayRequest(name: name, since: DateTime.now(), approvers: const []),
+    );
   }
 
   Future<void> _voteAway(AwayRequest request, String vote) async {
@@ -795,6 +823,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       for (final name in kRoommates)
                                         if (_away.isAway(name)) name,
                                     },
+                                    onPerson: _isAdmin ? _setAwayAsAdmin : null,
                                   ),
                                   for (final request in _away.requests.values)
                                     if (_away.statusOf(request.name) ==

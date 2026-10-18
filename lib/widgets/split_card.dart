@@ -32,6 +32,10 @@ class SplitCard extends StatelessWidget {
   /// Flatmates away from the flat: marked, since new spending skips them.
   final Set<String> away;
 
+  /// Tapping a flatmate's name, for the admin to send them away or bring
+  /// them back. Null for everyone else, and the names are not tappable.
+  final ValueChanged<String>? onPerson;
+
   const SplitCard({
     super.key,
     required this.pool,
@@ -42,6 +46,7 @@ class SplitCard extends StatelessWidget {
     required this.onConfirm,
     required this.onOffset,
     this.away = const {},
+    this.onPerson,
   });
 
   Expense? _pendingFor(Settlement settlement) {
@@ -83,39 +88,44 @@ class SplitCard extends StatelessWidget {
                 children: [
                   Expanded(
                     flex: 4,
-                    child: Row(
-                      children: [
-                        // Faded while away: they are not in new spending.
-                        Opacity(
-                          opacity: away.contains(person.name) ? 0.35 : 1,
-                          child: Avatar(person.name, size: 22),
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            person.name,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: away.contains(person.name)
-                                  ? ink.withValues(alpha: 0.5)
-                                  : ink,
+                    child: _Tappable(
+                      onTap: onPerson == null
+                          ? null
+                          : () => onPerson!(person.name),
+                      child: Row(
+                        children: [
+                          // Faded while away: they are not in new spending.
+                          Opacity(
+                            opacity: away.contains(person.name) ? 0.35 : 1,
+                            child: Avatar(person.name, size: 22),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              person.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: away.contains(person.name)
+                                    ? ink.withValues(alpha: 0.5)
+                                    : ink,
+                              ),
                             ),
                           ),
-                        ),
-                        if (away.contains(person.name)) ...[
-                          const SizedBox(width: 4),
-                          const Tooltip(
-                            message: 'в отпуске',
-                            child: Icon(
-                              Icons.beach_access_rounded,
-                              size: 13,
-                              color: kPayColor,
+                          if (away.contains(person.name)) ...[
+                            const SizedBox(width: 4),
+                            const Tooltip(
+                              message: 'в отпуске',
+                              child: Icon(
+                                Icons.beach_access_rounded,
+                                size: 13,
+                                color: kPayColor,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                   Expanded(
@@ -296,6 +306,24 @@ class SplitCard extends StatelessWidget {
     if (balance >= kSettledThreshold) return incomeColor(context);
     if (balance <= -kSettledThreshold) return expenseColor(context);
     return accentForeground(context).withValues(alpha: 0.6);
+  }
+}
+
+/// The name cell, tappable only when there is something to do with it.
+class _Tappable extends StatelessWidget {
+  final VoidCallback? onTap;
+  final Widget child;
+
+  const _Tappable({required this.onTap, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (onTap == null) return child;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: child,
+    );
   }
 }
 
