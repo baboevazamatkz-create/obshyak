@@ -562,20 +562,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return monthChanged ? _monthDivider(next) : const SizedBox(height: 7);
   }
 
-  /// A row: a tap opens its receipt, or for the admin edits a purchase;
-  /// only the admin can swipe one away.
+  /// A row: a tap opens its receipt; the admin long-presses a purchase to
+  /// edit it, and is the only one who can swipe a row away.
   Widget _buildExpenseRow(Expense expense) {
-    // Only the admin edits, and only purchases; for everyone else a tap
-    // opens the receipt.
+    // A tap opens the receipt for everyone; the admin long-presses a
+    // purchase to edit it.
     final editable = _isAdmin && expense.type == TransactionType.expense;
     final tile = ExpenseTile(
       expense: expense,
       currency: kBudgetCurrency,
-      onTap: editable
-          ? () => _editPurchase(expense)
-          : expense.receiptId == null
-              ? null
-              : () => _showReceipt(expense.receiptId!),
+      onTap: expense.receiptId == null
+          ? null
+          : () => _showReceipt(expense.receiptId!),
+      onLongPress: editable ? () => _editPurchase(expense) : null,
     );
     if (!_isAdmin) return tile;
     return Dismissible(

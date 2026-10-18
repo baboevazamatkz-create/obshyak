@@ -111,7 +111,12 @@ class ExpenseTile extends StatelessWidget {
     final sign = isTransfer || expense.isFine || expense.isOffset
         ? ''
         : (isIncome ? '+' : '−');
-    final displayAmount = amountOverride ?? expense.amount;
+    // A purchase with a personal part shows only what goes into the split;
+    // the personal part is named in the details.
+    final displayAmount = amountOverride ??
+        (expense.type == TransactionType.expense
+            ? expense.sharedAmount
+            : expense.amount);
     final approxPrefix = isApproximate ? '≈ ' : '';
     final ink = accentForeground(context);
 

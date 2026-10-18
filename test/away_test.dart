@@ -12,6 +12,7 @@ import 'package:expense_tracker/models/shared_budget.dart';
 import 'package:expense_tracker/models/shared_split.dart';
 import 'package:expense_tracker/models/transaction_type.dart';
 import 'package:expense_tracker/widgets/add_expense_sheet.dart';
+import 'package:expense_tracker/widgets/expense_tile.dart';
 import 'package:expense_tracker/widgets/fine_banner.dart';
 import 'package:expense_tracker/widgets/split_card.dart';
 
@@ -350,6 +351,34 @@ void main() {
     await tester.pump();
     expect(saved, isNull);
     expect(find.text('Отметьте хотя бы одного'), findsOneWidget);
+  });
+
+  testWidgets('a purchase row shows only the part that is split',
+      (tester) async {
+    var longPressed = false;
+    final purchase = Expense(
+      id: 'p',
+      amount: 10000,
+      personal: 2500,
+      date: _day,
+      author: 'Аслан',
+      currency: AppCurrency.kzt,
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ExpenseTile(
+          expense: purchase,
+          currency: AppCurrency.kzt,
+          onLongPress: () => longPressed = true,
+        ),
+      ),
+    ));
+    expect(find.textContaining(AppCurrency.kzt.format.format(7500)),
+        findsOneWidget);
+    expect(find.textContaining(AppCurrency.kzt.format.format(10000)),
+        findsNothing);
+    await tester.longPress(find.byType(ExpenseTile));
+    expect(longPressed, isTrue);
   });
 
   test('a request with no approvers, as the admin sends one, is in force', () {
