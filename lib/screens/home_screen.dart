@@ -25,6 +25,7 @@ import '../widgets/expense_tile.dart';
 import '../widgets/fine_banner.dart';
 import '../widgets/fine_sheet.dart';
 import '../widgets/glass.dart';
+import '../widgets/pay_dialog.dart';
 import '../widgets/readable_width.dart';
 import '../widgets/receipt_dialog.dart';
 import '../widgets/split_card.dart';
@@ -213,18 +214,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// The payer says they sent [settlement]. It is written as a pending
   /// transfer that moves no balance until the recipient confirms it.
+  /// The whole debt is filled in; the payer can lower it to what they can
+  /// return now, and the rest stays owed.
   Future<void> _markPaid(Settlement settlement) async {
-    final amount = kBudgetCurrency.format.format(settlement.amount);
-    final sure = await _ask(
-      'Перевод отправлен?',
-      'Вы перевели ${settlement.to} $amount. '
-          'Долг закроется, когда ${settlement.to} подтвердит.',
-      'Да, отправил',
-    );
-    if (!sure) return;
+    final amount = await showPayDialog(context, settlement);
+    if (amount == null) return;
     await _addExpense(Expense(
       id: const Uuid().v4(),
-      amount: settlement.amount,
+      amount: amount,
       date: DateTime.now(),
       currency: kBudgetCurrency,
       type: TransactionType.transfer,
