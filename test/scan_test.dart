@@ -77,6 +77,7 @@ Future<void> _pumpSheet(
   required void Function(List<Expense>) onConfirm,
   Brightness brightness = Brightness.light,
   double textScale = 1.0,
+  List<String>? defaultMembers,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -91,6 +92,7 @@ Future<void> _pumpSheet(
           result: result,
           currency: AppCurrency.rub,
           duplicates: duplicates,
+          defaultMembers: defaultMembers,
           onConfirm: onConfirm,
         ),
       ),
@@ -611,6 +613,45 @@ void main() {
   });
 
   group('The review sheet', () {
+    testWidgets('scanned purchases keep their own choice of participants',
+        (tester) async {
+      final result = ScanResult.fromJson(
+        Map<String, dynamic>.from(_workerAnswer),
+        fallbackCurrency: AppCurrency.rub,
+      );
+      final purchase = result.transactions.first;
+      List<Expense>? saved;
+      await _pumpSheet(
+        tester,
+        result: ScanResult(
+          document: ScanDocument.statement,
+          transactions: [purchase, purchase.copyWith(amount: 200)],
+        ),
+        duplicates: const {},
+        defaultMembers: const ['Азамат'],
+        onConfirm: (expenses) => saved = expenses,
+      );
+
+      final azamat = find.widgetWithText(FilterChip, 'Азамат').first;
+      final imran = find.widgetWithText(FilterChip, 'Имран').first;
+      final confirm = find.widgetWithText(ElevatedButton, 'Добавить 2 записи');
+      await tester.ensureVisible(azamat);
+      await tester.tap(azamat);
+      await tester.pumpAndSettle();
+      expect(tester.widget<ElevatedButton>(confirm).onPressed, isNull);
+
+      await tester.ensureVisible(imran);
+      await tester.tap(imran);
+      await tester.pumpAndSettle();
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+
+      expect(saved?.map((expense) => expense.members), [
+        ['Имран'],
+        ['Азамат'],
+      ]);
+    });
+
     ScanResult parsed() => ScanResult.fromJson(
           Map<String, dynamic>.from(_workerAnswer),
           fallbackCurrency: AppCurrency.rub,

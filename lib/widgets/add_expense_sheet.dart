@@ -8,8 +8,8 @@ import '../models/shared_budget.dart';
 import '../models/expense.dart';
 import '../models/transaction_type.dart';
 import '../theme.dart';
-import 'avatar.dart';
 import 'currency_symbol_icon.dart';
+import 'expense_share_picker.dart';
 
 final _dateFormat = DateFormat('d MMMM y', 'ru');
 
@@ -72,9 +72,7 @@ class AddExpenseSheet extends StatefulWidget {
   /// hand is for the flat only, so it goes without.
   final bool askPersonal;
 
-  /// The admin's control over whom the purchase is split between --
-  /// anyone, including a flatmate who is away. Without it the split is
-  /// everyone home. Who paid is never asked: it is whoever entered it.
+  /// Lets the user choose who shares the purchase, including anyone away.
   final bool chooseShares;
 
   /// Starting split for a new purchase when [chooseShares] is on; an
@@ -127,7 +125,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
   /// [AddExpenseSheet.chooseShares] only.
   late Set<String> _members;
-  String? _sharesError;
+  bool _showSharesError = false;
 
   bool get _isEditing => widget.existing != null && !widget.isDraft;
 
@@ -196,7 +194,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       personal = parsed;
     }
     if (widget.chooseShares && _members.isEmpty) {
-      setState(() => _sharesError = 'Отметьте хотя бы одного');
+      setState(() => _showSharesError = true);
       return;
     }
 
@@ -225,52 +223,6 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       ),
     );
     Navigator.of(context).pop();
-  }
-
-  /// Whom the purchase is split between, any of the four.
-  List<Widget> _sharesControls(BuildContext context) {
-    final label = microLabel(
-      context,
-      size: _s(10.5),
-      color: accentForeground(context).withValues(alpha: 0.6),
-    );
-    Widget face(String name) => Opacity(
-          opacity: widget.away.contains(name) ? 0.4 : 1,
-          child: Avatar(name, size: _s(22)),
-        );
-    void touched() {
-      if (_sharesError != null) _sharesError = null;
-    }
-
-    return [
-      SizedBox(height: _s(18)),
-      Text('НА КОГО ДЕЛИТСЯ', style: label),
-      SizedBox(height: _s(8)),
-      Wrap(
-        spacing: _s(8),
-        runSpacing: _s(8),
-        children: [
-          for (final name in kRoommates)
-            FilterChip(
-              avatar: face(name),
-              label: Text(name),
-              selected: _members.contains(name),
-              showCheckmark: false,
-              onSelected: (on) => setState(() {
-                on ? _members.add(name) : _members.remove(name);
-                touched();
-              }),
-            ),
-        ],
-      ),
-      if (_sharesError != null) ...[
-        SizedBox(height: _s(8)),
-        Text(
-          _sharesError!,
-          style: TextStyle(color: expenseColor(context), fontSize: _s(13)),
-        ),
-      ],
-    ];
   }
 
   @override
@@ -461,7 +413,19 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                   ),
                 ),
               ),
-              if (widget.chooseShares) ..._sharesControls(context),
+              if (widget.chooseShares) ...[
+                SizedBox(height: _s(18)),
+                ExpenseSharePicker(
+                  members: _members,
+                  away: widget.away,
+                  showError: _showSharesError,
+                  scale: _kScale,
+                  onChanged: (name, selected) => setState(() {
+                    selected ? _members.add(name) : _members.remove(name);
+                    _showSharesError = false;
+                  }),
+                ),
+              ],
               if (widget.onShowReceipt != null) ...[
                 SizedBox(height: _s(10)),
                 TextButton.icon(

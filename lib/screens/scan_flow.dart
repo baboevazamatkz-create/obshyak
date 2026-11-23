@@ -41,6 +41,8 @@ class ScanFlow {
         onAdd,
     required Future<void> Function(Uint8List photo) onManual,
     bool recognize = true,
+    List<String>? defaultMembers,
+    Set<String> away = const {},
   }) async {
     // Drops focus from whatever field was last typed into -- adding an
     // expense, naming the budget. On the web this also blurs the hidden
@@ -134,6 +136,8 @@ class ScanFlow {
           result: result,
           currency: currency,
           duplicates: findDuplicates(result.transactions, existing),
+          defaultMembers: defaultMembers,
+          away: away,
           onConfirm: (expenses) async {
             if (expenses.isEmpty) return;
             await onAdd(expenses, photo);

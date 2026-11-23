@@ -11,6 +11,7 @@ import 'package:expense_tracker/models/expense.dart';
 import 'package:expense_tracker/models/expense_category.dart';
 import 'package:expense_tracker/models/fines.dart';
 import 'package:expense_tracker/models/scanned_transaction.dart';
+import 'package:expense_tracker/models/shared_budget.dart';
 import 'package:expense_tracker/models/shared_split.dart';
 import 'package:expense_tracker/models/transaction_type.dart';
 import 'package:expense_tracker/screens/camera_capture_screen.dart';
@@ -203,6 +204,7 @@ void main() {
                   ),
                   currency: AppCurrency.kzt,
                   duplicates: const {},
+                  defaultMembers: kRoommates,
                   onConfirm: (_) {},
                 ),
               ),

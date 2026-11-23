@@ -316,7 +316,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await _repository.confirmTransfer(kSharedBudgetCode, transfer.id);
   }
 
-  /// The only way to add a purchase: a photo or screenshot of its receipt.
+  /// Adds purchases from a photo or screenshot of a receipt.
   /// With the scanner set up it reads the receipt; without it, or when it
   /// cannot, the purchase is typed in by hand -- with the photo attached
   /// either way, so every purchase has its receipt behind it.
@@ -326,6 +326,8 @@ class _HomeScreenState extends State<HomeScreen> {
       currency: kBudgetCurrency,
       existing: expenses,
       recognize: _scanEnabled,
+      defaultMembers: _away.present,
+      away: _away.awayNames,
       onManual: _addByHand,
       onAdd: (scanned, photo) async {
         // The flat records purchases only; an incoming payment read off a
@@ -349,7 +351,6 @@ class _HomeScreenState extends State<HomeScreen> {
               expense.copyWith(
                 author: widget.myName,
                 receiptId: receiptId,
-                members: _away.present,
               ),
           ],
         );
@@ -386,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
           type: TransactionType.expense,
           currency: kBudgetCurrency,
           askPersonal: photo != null,
-          chooseShares: _isAdmin,
+          chooseShares: true,
           defaultMembers: _away.present,
           away: _away.awayNames,
           onSubmit: (expense) async {

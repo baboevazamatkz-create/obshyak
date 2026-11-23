@@ -5,9 +5,11 @@ import '../models/currency.dart';
 import '../models/expense.dart';
 import '../models/expense_category.dart';
 import '../models/scanned_transaction.dart';
+import '../models/shared_budget.dart';
 import '../models/transaction_type.dart';
 import '../theme.dart';
 import 'amount_format.dart';
+import 'expense_share_picker.dart';
 
 final _rowDate = DateFormat('d MMM', 'ru');
 
@@ -26,6 +28,9 @@ class ScanReviewSheet extends StatefulWidget {
   /// already. Offered, but not ticked.
   final Set<int> duplicates;
 
+  /// Initial participants for each purchase. Null hides the split controls.
+  final List<String>? defaultMembers;
+  final Set<String> away;
   final void Function(List<Expense> expenses) onConfirm;
 
   const ScanReviewSheet({
@@ -34,6 +39,8 @@ class ScanReviewSheet extends StatefulWidget {
     required this.currency,
     required this.duplicates,
     required this.onConfirm,
+    this.defaultMembers,
+    this.away = const {},
   });
 
   @override
@@ -47,6 +54,13 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
     for (var i = 0; i < _rows.length; i++)
       if (!widget.duplicates.contains(i)) i,
   };
+
+  final _membersByRow = <int, Set<String>>{};
+
+  Iterable<String>? _membersFor(int index) {
+    if (_rows[index].type != TransactionType.expense) return null;
+    return _membersByRow[index] ?? widget.defaultMembers;
+  }
 
   bool get _isEmpty => _rows.isEmpty;
 
@@ -70,7 +84,10 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
       row.amount <= 0 || row.personal < 0 || row.personal > row.amount;
 
   bool get _canConfirm =>
-      _selected.isNotEmpty && _selected.every((i) => !_rowInvalid(_rows[i]));
+      _selected.isNotEmpty &&
+      _selected.every(
+        (i) => !_rowInvalid(_rows[i]) && _membersFor(i)?.isEmpty != true,
+      );
 
   void _toggleAll() {
     setState(() {
@@ -97,12 +114,31 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
     });
   }
 
+  void _changeMember(int index, String name, bool selected) {
+    setState(() {
+      final members = _membersByRow.putIfAbsent(
+        index,
+        () => {...widget.defaultMembers!},
+      );
+      selected ? members.add(name) : members.remove(name);
+      _selected.add(index);
+    });
+  }
+
+  Expense _expenseAt(int index) {
+    final expense = _rows[index].toExpense(householdCurrency: widget.currency);
+    final members = _membersFor(index);
+    if (members == null) return expense;
+    return expense.copyWith(
+      members: kRoommates.where(members.contains).toList(),
+    );
+  }
+
   void _confirm() {
     if (!_canConfirm) return;
     final chosen = [
       for (var i = 0; i < _rows.length; i++)
-        if (_selected.contains(i))
-          _rows[i].toExpense(householdCurrency: widget.currency),
+        if (_selected.contains(i)) _expenseAt(i),
     ];
     widget.onConfirm(chosen);
     Navigator.of(context).pop();
@@ -214,16 +250,30 @@ class _ScanReviewSheetState extends State<ScanReviewSheet> {
                   padding: EdgeInsets.zero,
                   itemCount: _rows.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) => _ScanRow(
-                    key: ValueKey(index),
-                    row: _rows[index],
-                    currency: widget.currency,
-                    selected: _selected.contains(index),
-                    duplicate: widget.duplicates.contains(index),
-                    invalid: _rowInvalid(_rows[index]),
-                    onToggle: () => _toggle(index),
-                    onChanged: (row) => _update(index, row),
-                  ),
+                  itemBuilder: (context, index) {
+                    final members = _membersFor(index);
+                    return _ScanRow(
+                      key: ValueKey(index),
+                      row: _rows[index],
+                      currency: widget.currency,
+                      selected: _selected.contains(index),
+                      duplicate: widget.duplicates.contains(index),
+                      invalid: _rowInvalid(_rows[index]),
+                      onToggle: () => _toggle(index),
+                      onChanged: (row) => _update(index, row),
+                      sharePicker: members == null
+                          ? null
+                          : ExpenseSharePicker(
+                              members: members,
+                              away: widget.away,
+                              showError: members.isEmpty &&
+                                  _selected.contains(index),
+                              scale: 0.8,
+                              onChanged: (name, selected) =>
+                                  _changeMember(index, name, selected),
+                            ),
+                    );
+                  },
                 ),
               ),
             const SizedBox(height: 18),
@@ -282,6 +332,7 @@ class _ScanRow extends StatelessWidget {
   final bool invalid;
   final VoidCallback onToggle;
   final ValueChanged<ScannedTransaction> onChanged;
+  final Widget? sharePicker;
 
   const _ScanRow({
     super.key,
@@ -292,6 +343,7 @@ class _ScanRow extends StatelessWidget {
     required this.invalid,
     required this.onToggle,
     required this.onChanged,
+    this.sharePicker,
   });
 
   @override
@@ -308,6 +360,7 @@ class _ScanRow extends StatelessWidget {
             row: row,
             currency: currency,
             onChanged: onChanged,
+            sharePicker: sharePicker,
           ),
         ),
       ],
@@ -422,11 +475,13 @@ class _RowEditor extends StatefulWidget {
   final ScannedTransaction row;
   final AppCurrency currency;
   final ValueChanged<ScannedTransaction> onChanged;
+  final Widget? sharePicker;
 
   const _RowEditor({
     required this.row,
     required this.currency,
     required this.onChanged,
+    this.sharePicker,
   });
 
   @override
@@ -541,6 +596,7 @@ class _RowEditorState extends State<_RowEditor> {
               ),
             ],
           ),
+          if (widget.sharePicker case final picker?) picker,
         ],
       ),
     );
